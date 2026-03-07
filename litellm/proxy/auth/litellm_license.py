@@ -28,6 +28,7 @@ class LicenseCheck:
         self.license_str = os.getenv("LITELLM_LICENSE", None)
         verbose_proxy_logger.debug("License Str value - {}".format(self.license_str))
         self.http_handler = HTTPHandler(timeout=NON_LLM_CONNECTION_TIMEOUT)
+        self._premium_check_logged = False
         self.public_key = None
         self.read_public_key()
         self.airgapped_license_data: Optional["EnterpriseLicenseData"] = None
