@@ -96,13 +96,29 @@ class BaseEmailLogger(CustomLogger):
             f"send_user_invitation_email_event: {json.dumps(event, indent=4, default=str)}"
         )
 
+        app_name = os.getenv("UI_CUSTOM_BRAND_NAME", "LiteLLM")
+        user_name = None
+        if event.user_id:
+            from litellm.proxy.proxy_server import prisma_client
+            if prisma_client is not None:
+                user_row = await prisma_client.db.litellm_usertable.find_unique(where={"user_id": event.user_id})
+                if user_row is not None:
+                    user_name = user_row.user_alias
+        
+        user_name = user_name or getattr(event, "user_alias", None)
+
         email_html_content = USER_INVITATION_EMAIL_TEMPLATE.format(
+            app_name=app_name,
+            user_name=user_name or "",
             email_logo_url=email_params.logo_url,
             recipient_email=email_params.recipient_email,
             base_url=email_params.base_url,
             email_support_contact=email_params.support_contact,
             email_footer=email_params.signature,
         )
+        
+        if not user_name:
+            email_html_content = email_html_content.replace("<p>Hi ,</p>", "<p>Hi,</p>")
 
         await self.send_email(
             from_email=self.DEFAULT_LITELLM_EMAIL,

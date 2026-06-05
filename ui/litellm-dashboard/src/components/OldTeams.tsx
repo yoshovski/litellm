@@ -745,7 +745,7 @@ const Teams: React.FC<TeamProps> = ({
       render: (_: unknown, record: Team) => {
         const memberCount = perTeamInfo?.[record.team_id]?.team_info?.members_with_roles?.length ?? 0;
         const modelCount = record.models?.length ?? 0;
-        const keyCount = perTeamInfo?.[record.team_id]?.keys?.length ?? 0;
+        const keyCount = record.key_count ?? perTeamInfo?.[record.team_id]?.keys?.length ?? 0;
         return (
           <Flex gap={12} align="center">
             <Tooltip title={`${memberCount} Members`}>

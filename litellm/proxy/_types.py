@@ -3299,6 +3299,7 @@ class CallInfo(LiteLLMPydanticObjectBase):
     token: Optional[str] = Field(default=None, description="Hashed value of that key")
     customer_id: Optional[str] = None
     user_id: Optional[str] = None
+    user_alias: Optional[str] = None
     team_id: Optional[str] = None
     team_alias: Optional[str] = None
     organization_id: Optional[str] = None

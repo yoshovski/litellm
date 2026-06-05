@@ -216,7 +216,7 @@ async def new_organization(
             },
         )
 
-    if llm_router is None:
+    if llm_router is None and len(data.models) > 0:
         raise HTTPException(
             status_code=500, detail={"error": CommonProxyErrors.no_llm_router.value}
         )

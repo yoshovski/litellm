@@ -14,6 +14,7 @@ const UIThemeSettings: React.FC<UIThemeSettingsProps> = ({ userID, userRole, acc
   const { logoUrl, setLogoUrl, faviconUrl, setFaviconUrl } = useTheme();
   const [logoUrlInput, setLogoUrlInput] = useState<string>("");
   const [faviconUrlInput, setFaviconUrlInput] = useState<string>("");
+  const [emailBrandNameInput, setEmailBrandNameInput] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -35,6 +36,7 @@ const UIThemeSettings: React.FC<UIThemeSettingsProps> = ({ userID, userRole, acc
         const data = await response.json();
         setLogoUrlInput(data.values?.logo_url || "");
         setFaviconUrlInput(data.values?.favicon_url || "");
+        setEmailBrandNameInput(data.values?.email_brand_name || "");
         setLogoUrl(data.values?.logo_url || null);
         setFaviconUrl(data.values?.favicon_url || null);
       }
@@ -57,6 +59,7 @@ const UIThemeSettings: React.FC<UIThemeSettingsProps> = ({ userID, userRole, acc
         body: JSON.stringify({
           logo_url: logoUrlInput || null,
           favicon_url: faviconUrlInput || null,
+          email_brand_name: emailBrandNameInput || null,
         }),
       });
       if (response.ok) {
@@ -71,7 +74,7 @@ const UIThemeSettings: React.FC<UIThemeSettingsProps> = ({ userID, userRole, acc
   };
 
   const handleReset = async () => {
-    setLogoUrlInput(""); setFaviconUrlInput("");
+    setLogoUrlInput(""); setFaviconUrlInput(""); setEmailBrandNameInput("");
     setLogoUrl(null); setFaviconUrl(null);
     setLoading(true);
     try {
@@ -83,7 +86,7 @@ const UIThemeSettings: React.FC<UIThemeSettingsProps> = ({ userID, userRole, acc
           [getGlobalLitellmHeaderName()]: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ logo_url: null, favicon_url: null }),
+        body: JSON.stringify({ logo_url: null, favicon_url: null, email_brand_name: null }),
       });
       if (response.ok) { NotificationsManager.success("Theme settings reset to default!"); }
       else { throw new Error("Failed to reset"); }
@@ -99,10 +102,16 @@ const UIThemeSettings: React.FC<UIThemeSettingsProps> = ({ userID, userRole, acc
     <div className="w-full mx-auto max-w-4xl px-6 py-8">
       <div className="mb-8">
         <Title className="text-2xl font-bold mb-2">UI Theme Customization</Title>
-        <Text className="text-gray-600">Customize your LiteLLM admin dashboard with a custom logo and favicon.</Text>
+        <Text className="text-gray-600">Customize your LiteLLM admin dashboard with a custom logo, favicon, and brand name.</Text>
       </div>
       <Card className="shadow-sm p-6">
         <div className="space-y-6">
+          <div>
+            <Text className="text-sm font-medium text-gray-700 mb-2 block">Custom Brand Name</Text>
+            <TextInput placeholder="e.g. ChatOctave" value={emailBrandNameInput}
+              onValueChange={(v) => { setEmailBrandNameInput(v); }} className="w-full" />
+            <Text className="text-xs text-gray-500 mt-1">Enter a custom brand/app name to display in emails and UI instead of LiteLLM</Text>
+          </div>
           <div>
             <Text className="text-sm font-medium text-gray-700 mb-2 block">Custom Logo URL</Text>
             <TextInput placeholder="https://example.com/logo.png" value={logoUrlInput}

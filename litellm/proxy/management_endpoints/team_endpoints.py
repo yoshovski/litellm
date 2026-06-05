@@ -4222,6 +4222,28 @@ async def list_team_v2(
                 team_item.access_group_mcp_server_ids = list(mcp_ids)
                 team_item.access_group_agent_ids = list(agent_ids)
 
+        # Resolve key counts in a single batch query
+        team_ids = [t.team_id for t in team_list if isinstance(t, TeamListItem) and t.team_id is not None]
+        if team_ids:
+            try:
+                import asyncio
+                
+                async def count_keys_for_team(team_id: str):
+                    try:
+                        count = await prisma_client.db.litellm_verificationtoken.count(where={"team_id": team_id})
+                        return team_id, count
+                    except Exception:
+                        return team_id, 0
+                
+                counts = await asyncio.gather(*[count_keys_for_team(tid) for tid in team_ids])
+                count_map = dict(counts)
+                
+                for t in team_list:
+                    if isinstance(t, TeamListItem) and t.team_id in count_map:
+                        t.key_count = count_map[t.team_id]
+            except Exception as e:
+                verbose_proxy_logger.warning("Failed to resolve key counts: %s", e)
+
     return {
         "teams": team_list,
         "total": total_count,

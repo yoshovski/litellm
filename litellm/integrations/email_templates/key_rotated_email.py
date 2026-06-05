@@ -156,48 +156,21 @@ KEY_ROTATED_EMAIL_TEMPLATE = """
 <body>
     <div class="container">
         <div class="header">
-            <img src="{email_logo_url}" alt="LiteLLM Logo" style="height: 32px; width: auto;">
+            <img src="{email_logo_url}" alt="{app_name} Logo" style="height: 32px; width: auto;">
         </div>
         <div class="content">
             <div class="greeting">
-                <p>Hi {recipient_email},</p>
+                <p>Hi {user_name},</p>
             </div>
             
             <div class="message">
-                <p><strong>Your LiteLLM API key has been rotated</strong> as part of our ongoing commitment to security best practices.</p>
+                <p><strong>Your API key has been rotated</strong> as part of our ongoing commitment to security best practices.</p>
                 <p style="margin-top: 16px;">Your previous API key has been deactivated and will no longer work. Please update your applications with the new key below.</p>
             </div>
             
-            <div class="key-container">
-                <div class="key-label">Your New API Key</div>
-                <div class="key">{key_token}</div>
-            </div>
+            {budget_info_html}
             
-            <div class="budget-info">
-                <p style="margin: 0;"><strong>Monthly Budget:</strong> {key_budget}</p>
-            </div>
-            
-            <h2>Action Required</h2>
-            <p>Update your applications and systems with the new API key. Here's an example:</p>
-            
-            <div class="code-block">
-<span class="code-keyword">import</span> openai<br>
-<br>
-client = openai.OpenAI(<br>
-&nbsp;&nbsp;api_key=<span class="code-string">"{key_token}"</span>,<br>
-&nbsp;&nbsp;base_url=<span class="code-string">"{base_url}"</span><br>
-)<br>
-<br>
-response = client.chat.completions.create(<br>
-&nbsp;&nbsp;model=<span class="code-string">"gpt-3.5-turbo"</span>, <span class="code-comment"># model to send to the proxy</span><br>
-&nbsp;&nbsp;messages = [<br>
-&nbsp;&nbsp;&nbsp;&nbsp;{{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-string">"role"</span>: <span class="code-string">"user"</span>,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-string">"content"</span>: <span class="code-string">"this is a test request, write a short poem"</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;}}<br>
-&nbsp;&nbsp;]<br>
-)
-            </div>
+            {key_display_html}
             
             <div class="separator"></div>
             

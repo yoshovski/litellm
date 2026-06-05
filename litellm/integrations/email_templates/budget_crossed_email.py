@@ -1,14 +1,14 @@
 """
-Modern Email Templates for LiteLLM Email Service with professional styling
+Modern Email Template for LiteLLM Budget Crossed
 """
 
-KEY_CREATED_EMAIL_TEMPLATE = """
+BUDGET_CROSSED_EMAIL_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Your API Key is Ready</title>
+    <title>Budget Limit Reached</title>
     <style>
         body, html {{
             margin: 0;
@@ -44,24 +44,17 @@ KEY_CREATED_EMAIL_TEMPLATE = """
             color: #333333;
             margin-bottom: 20px;
         }}
-        .key-container {{
-            margin: 28px 0;
-        }}
-        .key-label {{
-            font-size: 14px;
-            font-weight: 500;
-            margin-bottom: 8px;
-            color: #4b5563;
-        }}
-        .key {{
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            word-break: break-all;
-            background-color: #f9fafb;
+        .budget-info {{
+            background-color: #fef2f2;
             border-radius: 6px;
-            padding: 16px;
-            font-size: 14px;
-            border: 1px solid #e5e7eb;
-            color: #4338ca;
+            padding: 16px 20px;
+            margin: 24px 0;
+            font-size: 15px;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+        }}
+        .budget-info p {{
+            margin: 8px 0;
         }}
         h2 {{
             font-size: 18px;
@@ -70,50 +63,21 @@ KEY_CREATED_EMAIL_TEMPLATE = """
             margin-bottom: 16px;
             color: #333333;
         }}
-        .budget-info {{
-            background-color: #f0fdf4;
-            border-radius: 6px;
-            padding: 14px 16px;
-            margin: 24px 0;
-            font-size: 14px;
-            border: 1px solid #dcfce7;
-        }}
-        .code-block {{
-            background-color: #f8fafc;
-            color: #334155;
-            border-radius: 8px;
-            padding: 20px;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 13px;
-            overflow-x: auto;
-            margin: 20px 0;
-            line-height: 1.6;
-            border: 1px solid #e2e8f0;
-        }}
-        .code-comment {{
-            color: #64748b;
-        }}
-        .code-string {{
-            color: #0369a1;
-        }}
-        .code-keyword {{
-            color: #7e22ce;
-        }}
         .btn {{
             display: inline-block;
-            padding: 8px 20px;
-            background-color: #6366f1;
+            padding: 10px 24px;
+            background-color: #ef4444;
             color: #ffffff !important;
             text-decoration: none;
             border-radius: 6px;
             font-weight: 500;
-            margin-top: 24px;
+            margin-top: 16px;
             text-align: center;
-            font-size: 14px;
+            font-size: 15px;
             transition: background-color 0.2s;
         }}
         .btn:hover {{
-            background-color: #4f46e5;
+            background-color: #dc2626;
             color: #ffffff !important;
         }}
         .separator {{
@@ -128,15 +92,6 @@ KEY_CREATED_EMAIL_TEMPLATE = """
             font-size: 13px;
             background-color: #f8fafc;
             border-top: 1px solid #f1f5f9;
-        }}
-        .social-links {{
-            margin-top: 12px;
-        }}
-        .social-links a {{
-            display: inline-block;
-            margin: 0 8px;
-            color: #64748b;
-            text-decoration: none;
         }}
         @media only screen and (max-width: 620px) {{
             .container {{
@@ -160,23 +115,27 @@ KEY_CREATED_EMAIL_TEMPLATE = """
         </div>
         <div class="content">
             <div class="greeting">
-                <p>Hi {user_name},</p>
+                <p>Hi {recipient_name},</p>
             </div>
             
             <div class="message">
-                <p>Great news! Your API key is ready to use.</p>
+                <p>Your {team_info}LLM API usage this month has reached the <strong>monthly budget of ${max_budget}</strong>.</p>
             </div>
             
-            {budget_info_html}
+            <div class="budget-info">
+                <p><strong>Current Spend:</strong> ${current_spend}</p>
+                <p><strong>Budget Limit:</strong> ${max_budget}</p>
+                <p style="margin-top: 12px; font-weight: 500; font-size: 14px; color: #b91c1c;">
+                    ⚠️ API requests will be rejected until either (a) you increase your monthly budget or (b) your monthly usage resets at the beginning of the next calendar month.
+                </p>
+            </div>
             
-            {key_display_html}
-            
-            <a href="https://docs.litellm.ai/docs/proxy/user_keys" class="btn" style="color: #ffffff;">View Documentation</a>
+            <a href="{base_url}" class="btn" style="color: #ffffff;">Manage Budget</a>
             
             <div class="separator"></div>
             
             <h2>Need Help?</h2>
-            <p>If you have any questions or need assistance, please contact us at {email_support_contact}.</p>
+            <p>If you have any questions or need to request a budget increase, please contact us at {email_support_contact}.</p>
         </div>
         {email_footer}
     </div>

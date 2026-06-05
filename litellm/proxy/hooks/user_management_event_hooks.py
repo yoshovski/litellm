@@ -103,6 +103,7 @@ class UserManagementEventHooks:
             user_email=response.user_email,
             team_id=response.team_id,
             key_alias=response.key_alias,
+            user_alias=data.user_alias,
         )
 
         #########################################################
@@ -120,6 +121,15 @@ class UserManagementEventHooks:
                 + CommonProxyErrors.missing_enterprise_package.value
             )
             use_enterprise_email_hooks = False
+
+        # Check if the specific event is enabled in UI settings
+        from litellm.proxy.proxy_server import general_settings
+        email_settings = general_settings.get("email_settings", {})
+        if email_settings.get("New User Invitation", True) is False:
+            verbose_proxy_logger.debug(
+                "New User Invitation event disabled in settings, skipping email"
+            )
+            return
 
         if use_enterprise_email_hooks and (data.send_invite_email is True):
             initialized_email_loggers = litellm.logging_callback_manager.get_custom_loggers_for_type(

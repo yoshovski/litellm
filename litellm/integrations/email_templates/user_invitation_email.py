@@ -115,17 +115,17 @@ USER_INVITATION_EMAIL_TEMPLATE = """
 <body>
     <div class="container">
         <div class="logo">
-            <img src="{email_logo_url}" alt="LiteLLM Logo" style="height: 32px; width: auto;">
+            <img src="{email_logo_url}" alt="{app_name} Logo" style="max-height: 32px; max-width: 150px; object-fit: contain;">
         </div>
         <div class="content">
-            <h1>Welcome to LiteLLM</h1>
+            <h1>Welcome to {app_name}</h1>
 
             <div class="greeting">
-                <p>Hi {recipient_email},</p>
+                <p>Hi there,</p>
             </div>
             
             <div class="intro-text">
-                <p>LiteLLM allows you to call 100+ LLM providers in the OpenAI API format. Get started by accepting your invitation.</p>
+                <p>{app_name} allows you to call 100+ LLM providers in the OpenAI API format. Get started by accepting your invitation.</p>
             </div>
 
             <div class="btn-container">
@@ -152,7 +152,7 @@ USER_INVITATION_EMAIL_TEMPLATE = """
                 <span class="arrow"></span>
             </a>
             
-            <p>View all supported LLM endpoints on LiteLLM (/chat/completions, /embeddings, /responses etc.)</p>
+            <p>View all supported LLM endpoints on {app_name} (/chat/completions, /embeddings, /responses etc.)</p>
             
             <div class="divider"></div>
             
