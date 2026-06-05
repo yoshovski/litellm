@@ -101,7 +101,7 @@ export function RegenerateKeyModal({ selectedToken, visible, onClose, onKeyUpdat
       // edits must win over whatever the API echoes back.
       const updatedKeyData: Partial<KeyResponse> = {
         ...response,
-        token: response.token || response.key_id || selectedToken.token,
+        token: response.token || response.token_id || selectedToken.token,
         key_name: response.key,
         max_budget: formValues.max_budget,
         tpm_limit: formValues.tpm_limit,
