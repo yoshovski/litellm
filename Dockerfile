@@ -58,6 +58,10 @@ RUN uv sync --frozen --no-default-groups --no-editable \
     --extra semantic-router \
     --python python3
 
+# Copy the compiled UI into the installed site-packages so the proxy can serve it
+RUN mkdir -p /app/.venv/lib/python3.13/site-packages/litellm/proxy/_experimental/out && \
+    cp -r litellm/proxy/_experimental/out/* /app/.venv/lib/python3.13/site-packages/litellm/proxy/_experimental/out/ || true
+
 RUN prisma generate --schema=./schema.prisma
 
 RUN sed -i 's/\r$//' docker/entrypoint.sh && chmod +x docker/entrypoint.sh && \
