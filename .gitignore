@@ -121,5 +121,5 @@ crash.*.log
 # .terraform.lock.hcl is intentionally NOT ignored — it pins provider versions
 # and should be committed.
 .vscode
-litellm/proxy/_experimental/out/
-ui/litellm-dashboard/out/
+
+dist/
