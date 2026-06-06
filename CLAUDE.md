@@ -1,3 +1,8 @@
+### Custom Release Workflow (CRITICAL for AI Agents)
+- **UI Builds**: If you modify `ui/litellm-dashboard/src/`, you MUST run `npm run build` and then `cp -r out/* ../../litellm/proxy/_experimental/out/`. The proxy server reads the UI from `_experimental/out/` and WILL serve a stale UI if this is missed.
+- **Docker**: The `litellm/Dockerfile` contains a custom step after `uv sync` to copy `_experimental/out/` into the virtual environment's `site-packages`. Never delete this.
+- **Releases**: Tag releases as `v<upstream-version>-custom-v<build>` (e.g. `v1.87.1-custom-v4`). Pushing a tag automatically builds and pushes the Docker image via GitHub Actions.
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
