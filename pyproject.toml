@@ -10,6 +10,7 @@ authors = [
     { name = "BerriAI" },
 ]
 dependencies = [
+    "certifi>=2026.10.19",
     # Ranges (not exact pins) so SDK consumers can coexist with their other
     # deps. Reproducibility for our Docker/CI comes from `uv.lock`.
     # When changing a floor, verify it installs + imports on every supported
@@ -225,7 +226,7 @@ build-backend = "uv_build"
 
 [tool.uv]
 default-groups = ["dev"]
-required-version = ">=0.10.9"
+required-version = ">=0.13.4"
 exclude-newer = "3 days"
 
 [tool.uv.sources]
