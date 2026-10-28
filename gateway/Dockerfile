@@ -12,7 +12,7 @@ USER root
 
 COPY --from=uvbin /uv /uvx /usr/local/bin/
 
-RUN apk add --no-cache "ca-certificates-bundle>=20260909-r3" bash gcc python-3.13 python-3.13-dev openssl openssl-dev libsndfile
+RUN apk add --no-cache "ca-certificates-bundle>=20260909-r3" bash gcc python-3.13 python-3.13-dev openssl libssl3 libcrypto3 openssl-dev libsndfile
 
 # UV_COMPILE_BYTECODE=1   precompiles .pyc at install time → faster cold start.
 # UV_LINK_MODE=copy       avoids hardlink warnings when uv installs from a
@@ -58,7 +58,7 @@ FROM $LITELLM_RUNTIME_IMAGE AS runtime
 
 USER root
 
-RUN apk add --no-cache "ca-certificates-bundle>=20260909-r3" bash openssl tzdata python-3.13 libsndfile libatomic
+RUN apk add --no-cache "ca-certificates-bundle>=20260909-r3" bash openssl libssl3 libcrypto3 tzdata python-3.13 libsndfile libatomic
 
 # wolfi-base ships an unprivileged `nonroot` account (UID/GID 65532) with
 # /home/nonroot. We run the proxy as that user.

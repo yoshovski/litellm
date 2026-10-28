@@ -8,6 +8,7 @@ on:
       - "**/uv.lock"
       - "**/requirements*.txt"
       - "scripts/check_certificate_trust.py"
+      - "scripts/check_proxy_database.sh"
       - ".github/workflows/certificate-trust.yml"
   workflow_dispatch:
 
@@ -73,3 +74,7 @@ jobs:
             --entrypoint ${{ matrix.system_python }} \
             --volume "$PWD/scripts/check_certificate_trust.py:/check.py:ro" \
             local/certificate-trust:${{ matrix.name }} /check.py --online ${{ matrix.system_arguments }}
+
+      - name: Verify Prisma engines, migrations and proxy database startup
+        timeout-minutes: 10
+        run: bash scripts/check_proxy_database.sh local/certificate-trust:${{ matrix.name }}

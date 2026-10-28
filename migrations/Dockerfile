@@ -31,7 +31,7 @@ USER root
 
 COPY --from=uvbin /uv /uvx /usr/local/bin/
 
-RUN apk add --no-cache "ca-certificates-bundle>=20260909-r3" bash gcc python-3.13 python-3.13-dev openssl openssl-dev libsndfile
+RUN apk add --no-cache "ca-certificates-bundle>=20260909-r3" bash gcc python-3.13 python-3.13-dev openssl libssl3 libcrypto3 openssl-dev libsndfile
 
 ENV UV_PROJECT_ENVIRONMENT=/app/.venv \
     UV_LINK_MODE=copy \
@@ -78,7 +78,7 @@ FROM $LITELLM_RUNTIME_IMAGE AS runtime
 
 USER root
 
-RUN apk add --no-cache "ca-certificates-bundle>=20260909-r3" bash openssl tzdata python-3.13 libsndfile libatomic
+RUN apk add --no-cache "ca-certificates-bundle>=20260909-r3" bash openssl libssl3 libcrypto3 tzdata python-3.13 libsndfile libatomic
 
 # wolfi-base ships an unprivileged `nonroot` account (UID/GID 65532). The
 # Prisma engine binaries are dynamically linked against libssl/libcrypto, so
