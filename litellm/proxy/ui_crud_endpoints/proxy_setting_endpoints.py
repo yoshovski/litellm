@@ -39,6 +39,12 @@ class UIThemeConfig(BaseModel):
         description="URL to custom favicon image. Must be an HTTP/HTTPS URL to a .ico, .png, or .svg file",
     )
 
+    # Brand configuration
+    email_brand_name: Optional[str] = Field(
+        default=None,
+        description="Custom brand/app name to display in emails and UI instead of LiteLLM",
+    )
+
 
 class SettingsResponse(BaseModel):
     """Base response model for settings with values and schema information"""
@@ -1008,6 +1014,25 @@ async def update_ui_theme_settings(theme_config: UIThemeConfig):
         if "LITELLM_FAVICON_URL" in os.environ:
             del os.environ["LITELLM_FAVICON_URL"]
             verbose_proxy_logger.debug("Removed LITELLM_FAVICON_URL from environment")
+
+    # Update UI_CUSTOM_BRAND_NAME environment variable if email_brand_name is provided
+    email_brand_name = theme_data.get("email_brand_name")
+    verbose_proxy_logger.debug(f"Updating email_brand_name: {email_brand_name}")
+
+    if (
+        email_brand_name and isinstance(email_brand_name, str) and email_brand_name.strip()
+    ):
+        config["environment_variables"]["UI_CUSTOM_BRAND_NAME"] = email_brand_name
+        os.environ["UI_CUSTOM_BRAND_NAME"] = email_brand_name
+        verbose_proxy_logger.debug(f"Set UI_CUSTOM_BRAND_NAME to: {email_brand_name}")
+    else:
+        # Remove the environment variable to restore default brand
+        if "UI_CUSTOM_BRAND_NAME" in config.get("environment_variables", {}):
+            del config["environment_variables"]["UI_CUSTOM_BRAND_NAME"]
+            verbose_proxy_logger.debug("Removed UI_CUSTOM_BRAND_NAME from config")
+        if "UI_CUSTOM_BRAND_NAME" in os.environ:
+            del os.environ["UI_CUSTOM_BRAND_NAME"]
+            verbose_proxy_logger.debug("Removed UI_CUSTOM_BRAND_NAME from environment")
 
     # Handle environment variable encryption if needed
     stored_config = config.copy()

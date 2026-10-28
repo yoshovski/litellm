@@ -5470,6 +5470,10 @@ class ProxyConfig:
                 pass_through_endpoints=general_settings["pass_through_endpoints"]
             )
 
+        ## EMAIL SETTINGS ##
+        if "email_settings" in _general_settings:
+            general_settings["email_settings"] = _general_settings["email_settings"]
+
         ## UI ACCESS MODE ##
         if "ui_access_mode" in _general_settings:
             general_settings["ui_access_mode"] = _general_settings["ui_access_mode"]

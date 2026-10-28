@@ -81,7 +81,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ accessToken, premiumUser,
                             <TextInput
                               name={key}
                               defaultValue={value as string}
-                              type="password"
+                              type={key.includes("PASSWORD") ? "password" : "text"}
                               disabled={true}
                               style={{ width: "400px" }}
                             />
@@ -92,7 +92,7 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ accessToken, premiumUser,
                             <TextInput
                               name={key}
                               defaultValue={value as string}
-                              type="password"
+                              type={key.includes("PASSWORD") ? "password" : "text"}
                               style={{ width: "400px" }}
                             />
                           </div>

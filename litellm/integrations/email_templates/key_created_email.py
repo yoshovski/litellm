@@ -156,47 +156,20 @@ KEY_CREATED_EMAIL_TEMPLATE = """
 <body>
     <div class="container">
         <div class="header">
-            <img src="{email_logo_url}" alt="LiteLLM Logo" style="height: 32px; width: auto;">
+            <img src="{email_logo_url}" alt="{app_name} Logo" style="height: 32px; width: auto;">
         </div>
         <div class="content">
             <div class="greeting">
-                <p>Hi {recipient_email},</p>
+                <p>Hi {user_name},</p>
             </div>
             
             <div class="message">
-                <p>Great news! Your LiteLLM API key is ready to use.</p>
+                <p>Great news! Your API key is ready to use.</p>
             </div>
             
-            <div class="budget-info">
-                <p style="margin: 0;"><strong>Monthly Budget:</strong> {key_budget}</p>
-            </div>
+            {budget_info_html}
             
-            <div class="key-container">
-                <div class="key-label">Your API Key</div>
-                <div class="key">{key_token}</div>
-            </div>
-            
-            <h2>Quick Start Guide</h2>
-            <p>Here's how to use your key with the OpenAI SDK:</p>
-            
-            <div class="code-block">
-<span class="code-keyword">import</span> openai<br>
-<br>
-client = openai.OpenAI(<br>
-&nbsp;&nbsp;api_key=<span class="code-string">"{key_token}"</span>,<br>
-&nbsp;&nbsp;base_url=<span class="code-string">"{base_url}"</span><br>
-)<br>
-<br>
-response = client.chat.completions.create(<br>
-&nbsp;&nbsp;model=<span class="code-string">"gpt-3.5-turbo"</span>, <span class="code-comment"># model to send to the proxy</span><br>
-&nbsp;&nbsp;messages = [<br>
-&nbsp;&nbsp;&nbsp;&nbsp;{{<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-string">"role"</span>: <span class="code-string">"user"</span>,<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-string">"content"</span>: <span class="code-string">"this is a test request, write a short poem"</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;}}<br>
-&nbsp;&nbsp;]<br>
-)
-            </div>
+            {key_display_html}
             
             <a href="https://docs.litellm.ai/docs/proxy/user_keys" class="btn" style="color: #ffffff;">View Documentation</a>
             

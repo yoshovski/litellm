@@ -106,24 +106,23 @@ async def send_team_budget_alert(webhook_event: WebhookEvent) -> bool:
             recipient_emails_str,
         )
 
-    email_html_content = f"""
-    <img src="{email_logo_url}" alt="LiteLLM Logo" width="150" height="50" /> <br/><br/><br/>
-
-    Budget Crossed for Team <b> {team_alias} </b> <br/> <br/>
-
-    Your Teams LLM API usage has crossed it's <b> budget of ${max_budget} </b>, current spend is <b>${webhook_event.spend}</b><br /> <br />
-
-    API requests will be rejected until either (a) you increase your budget or (b) your budget gets reset <br /> <br />
-
-    If you have any questions, please send an email to {email_support_contact} <br /> <br />
-
-    Best, <br />
-    The LiteLLM team <br />
-    """
+    from litellm.integrations.email_templates.budget_crossed_email import BUDGET_CROSSED_EMAIL_TEMPLATE as MODERN_BUDGET_CROSSED_EMAIL_TEMPLATE
+    
+    email_html_content = MODERN_BUDGET_CROSSED_EMAIL_TEMPLATE.format(
+        app_name=os.getenv("UI_CUSTOM_BRAND_NAME", "LiteLLM"),
+        email_logo_url=email_logo_url,
+        recipient_name=f"Team {team_alias}",
+        team_info=f"Team {team_alias} ",
+        current_spend=webhook_event.spend,
+        max_budget=max_budget,
+        base_url=os.getenv("PROXY_BASE_URL", "http://0.0.0.0:4000"),
+        email_support_contact=email_support_contact,
+        email_footer="",
+    )
 
     email_event = {
         "to": recipient_emails_str,
-        "subject": f"LiteLLM {event_name} for Team {team_alias}",
+        "subject": f"{os.getenv('UI_CUSTOM_BRAND_NAME', 'LiteLLM')}: {event_name} for Team {team_alias}",
         "html": email_html_content,
     }
 

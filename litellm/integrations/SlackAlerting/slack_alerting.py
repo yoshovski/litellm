@@ -40,6 +40,11 @@ from litellm.proxy._types import (
 from litellm.types.integrations.slack_alerting import *
 
 from ..email_templates.templates import *
+from ..email_templates.key_created_email import KEY_CREATED_EMAIL_TEMPLATE as MODERN_KEY_CREATED_EMAIL_TEMPLATE
+from ..email_templates.user_invitation_email import USER_INVITATION_EMAIL_TEMPLATE as MODERN_USER_INVITED_EMAIL_TEMPLATE
+from ..email_templates.key_rotated_email import KEY_ROTATED_EMAIL_TEMPLATE as MODERN_KEY_ROTATED_EMAIL_TEMPLATE
+from ..email_templates.budget_crossed_email import BUDGET_CROSSED_EMAIL_TEMPLATE as MODERN_BUDGET_CROSSED_EMAIL_TEMPLATE
+from ..email_templates.soft_budget_crossed_email import SOFT_BUDGET_CROSSED_EMAIL_TEMPLATE as MODERN_SOFT_BUDGET_CROSSED_EMAIL_TEMPLATE
 from .batching_handler import send_to_webhook, squash_payloads
 from .utils import process_slack_alerting_variables
 
@@ -1238,11 +1243,117 @@ Model Info:
                 if user_row is not None:
                     recipient_email = user_row.user_email
 
-            key_token = webhook_event.token
+            key_token = getattr(webhook_event, "token_id", None)
+            if not key_token:
+                key_token = webhook_event.token
+                if key_token:
+                    from litellm.proxy.utils import hash_token
+                    key_token = hash_token(key_token)
+
             key_budget = webhook_event.max_budget
+            
+            user_name = recipient_user_id or recipient_email or "User"
+            if recipient_user_id is not None and prisma_client is not None:
+                user_row = await prisma_client.db.litellm_usertable.find_unique(where={"user_id": recipient_user_id})
+                if user_row is not None:
+                    user_name = user_row.user_alias or user_row.user_id or recipient_email or "User"
+                    
             base_url = os.getenv("PROXY_BASE_URL", "http://0.0.0.0:4000")
+            app_name = os.getenv("UI_CUSTOM_BRAND_NAME", "LiteLLM")
+
+            if os.getenv("EMAIL_INCLUDE_API_KEY", "true").lower() == "false":
+                key_display_html = f"""
+                <div class="security-notice" style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 16px; margin: 24px 0;">
+                    <p style="margin: 0; color: #b45309; font-weight: 600;">🔒 Security Notice</p>
+                    <p style="margin: 8px 0 0 0; font-size: 14px; color: #92400e;">For security reasons, your API key details are not transmitted via email. Please log in to your dashboard at <a href="{base_url}">{base_url}</a> to view or rotate your keys.</p>
+                </div>
+                """
+            else:
+                key_display_html = f"""
+                <div class="key-container">
+                    <div class="key-label">Your API Key ID (Hash)</div>
+                    <div class="key">{key_token}</div>
+                </div>
+                
+                <div class="security-notice" style="background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 16px; margin: 24px 0;">
+                    <p style="margin: 0; color: #0369a1; font-weight: 600;">ℹ️ Security Information</p>
+                    <p style="margin: 8px 0 0 0; font-size: 14px; color: #075985;">The actual secret API key was displayed to you securely during generation and is not transmitted here. The string above is simply your Key ID (Hash) for tracking purposes.</p>
+                </div>
+                
+                <h2>Quick Start Guide</h2>
+                <p>Here's how to use your key with the OpenAI SDK. Replace the masked key below with the secret key you copied securely during generation:</p>
+                
+                <div class="code-block">
+<span class="code-keyword">import</span> openai<br>
+<br>
+client = openai.OpenAI(<br>
+&nbsp;&nbsp;api_key=<span class="code-string">"sk-xxxx...xxxx"</span>,<br>
+&nbsp;&nbsp;base_url=<span class="code-string">"{base_url}"</span><br>
+)<br>
+<br>
+response = client.chat.completions.create(<br>
+&nbsp;&nbsp;model=<span class="code-string">"gpt-3.5-turbo"</span>, <span class="code-comment"># model to send to the proxy</span><br>
+&nbsp;&nbsp;messages = [<br>
+&nbsp;&nbsp;&nbsp;&nbsp;{{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-string">"role"</span>: <span class="code-string">"user"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-string">"content"</span>: <span class="code-string">"this is a test request, write a short poem"</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;}}<br>
+&nbsp;&nbsp;]<br>
+)
+                </div>
+                """
+            
+            # Format Budget
+            try:
+                display_budget = "Unlimited" if not key_budget or float(key_budget) <= 0 else key_budget
+            except Exception:
+                display_budget = "Unlimited"
+                
+            # Get Team Alias
+            team_id = getattr(webhook_event, "team_id", None)
+            team_name = getattr(webhook_event, "team_alias", None)
+            if team_name is None and team_id is not None and prisma_client is not None:
+                try:
+                    team_row = await prisma_client.db.litellm_teamtable.find_unique(where={"team_id": team_id})
+                    if team_row is not None:
+                        team_name = team_row.team_alias
+                except Exception:
+                    pass
+            team_name = team_name or team_id or "Default Team"
+            
+            # Organization Row
+            org_id = getattr(webhook_event, "organization_id", None)
+            org_row = ""
+            if org_id and str(org_id).strip().lower().replace(" ", "_") not in ["default", "default_org", ""]:
+                org_row = f"""
+                    <tr>
+                        <td style="padding: 4px 0; color: #64748b;">Organization</td>
+                        <td style="padding: 4px 0; font-weight: 500;">{org_id}</td>
+                    </tr>
+                """
+                
+            budget_info_html = f"""
+            <div class="budget-info">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 4px 0; color: #64748b; width: 120px;">Key Alias</td>
+                        <td style="padding: 4px 0; font-weight: 500;">{getattr(webhook_event, "key_alias", None) or "None provided"}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px 0; color: #64748b;">Team</td>
+                        <td style="padding: 4px 0; font-weight: 500;">{team_name}</td>
+                    </tr>
+                    {org_row}
+                    <tr>
+                        <td style="padding: 4px 0; color: #64748b;">Monthly Budget</td>
+                        <td style="padding: 4px 0; font-weight: 500;">{display_budget}</td>
+                    </tr>
+                </table>
+            </div>
+            """
 
             email_html_content = "Alert from LiteLLM Server"
+            email_subject = f"{app_name}: {event_name}"
             if recipient_email is None:
                 verbose_proxy_logger.error(
                     "Trying to send email alert to no recipient",
@@ -1250,15 +1361,20 @@ Model Info:
                 )
 
             if webhook_event.event == "key_created":
-                email_html_content = KEY_CREATED_EMAIL_TEMPLATE.format(
+                email_subject = os.getenv("EMAIL_SUBJECT_KEY_CREATED", email_subject)
+                email_html_content = MODERN_KEY_CREATED_EMAIL_TEMPLATE.format(
+                    app_name=app_name,
                     email_logo_url=email_logo_url,
                     recipient_email=recipient_email,
-                    key_budget=key_budget,
-                    key_token=key_token,
+                    user_name=user_name,
+                    key_display_html=key_display_html,
+                    budget_info_html=budget_info_html,
                     base_url=base_url,
                     email_support_contact=email_support_contact,
+                    email_footer=os.getenv("EMAIL_SIGNATURE", ""),
                 )
             elif webhook_event.event == "internal_user_created":
+                email_subject = os.getenv("EMAIL_SUBJECT_INVITATION", email_subject)
                 # GET TEAM NAME
                 team_id = webhook_event.team_id
                 team_name = "Default Team"
@@ -1268,12 +1384,15 @@ Model Info:
                     )
                     if team_row is not None:
                         team_name = team_row.team_alias or "-"
-                email_html_content = USER_INVITED_EMAIL_TEMPLATE.format(
+                email_html_content = MODERN_USER_INVITED_EMAIL_TEMPLATE.format(
+                    app_name=app_name,
                     email_logo_url=email_logo_url,
                     recipient_email=recipient_email,
+                    user_name=user_name,
                     team_name=team_name,
                     base_url=base_url,
                     email_support_contact=email_support_contact,
+                    email_footer=os.getenv("EMAIL_SIGNATURE", ""),
                 )
             else:
                 verbose_proxy_logger.error(
@@ -1284,7 +1403,7 @@ Model Info:
             webhook_event.model_dump_json()
             email_event = {
                 "to": recipient_email,
-                "subject": f"LiteLLM: {event_name}",
+                "subject": email_subject,
                 "html": email_html_content,
             }
 
@@ -1298,6 +1417,192 @@ Model Info:
 
         except Exception as e:
             verbose_proxy_logger.error("Error sending email alert %s", str(e))
+            return False
+
+    async def send_key_rotated_email(
+        self, webhook_event: WebhookEvent
+    ) -> bool:
+        try:
+            from litellm.proxy.utils import send_email
+
+            if self.alerting is None or "email" not in self.alerting:
+                # do nothing if user does not want email alerts
+                return False
+            from litellm.proxy.proxy_server import premium_user, prisma_client
+
+            email_logo_url = os.getenv(
+                "SMTP_SENDER_LOGO", os.getenv("EMAIL_LOGO_URL", None)
+            )
+            email_support_contact = os.getenv("EMAIL_SUPPORT_CONTACT", None)
+            await self._check_if_using_premium_email_feature(
+                premium_user, email_logo_url, email_support_contact
+            )
+            if email_logo_url is None:
+                email_logo_url = LITELLM_LOGO_URL
+            if email_support_contact is None:
+                email_support_contact = LITELLM_SUPPORT_CONTACT
+
+            event_name = webhook_event.event_message
+            recipient_email = webhook_event.user_email
+            recipient_user_id = webhook_event.user_id
+            if (
+                recipient_email is None
+                and recipient_user_id is not None
+                and prisma_client is not None
+            ):
+                user_row = await prisma_client.db.litellm_usertable.find_unique(
+                    where={"user_id": recipient_user_id}
+                )
+
+                if user_row is not None:
+                    recipient_email = user_row.user_email
+
+            if recipient_email is None:
+                verbose_proxy_logger.error(
+                    "Trying to send key rotated email to no recipient",
+                    extra=webhook_event.dict(),
+                )
+                return False
+
+            key_token = getattr(webhook_event, "token_id", None)
+            if not key_token:
+                key_token = webhook_event.token
+                if key_token and key_token.startswith("sk-"):
+                    from litellm.proxy.utils import hash_token
+                    key_token = hash_token(key_token)
+                    
+            key_budget = webhook_event.max_budget
+            
+            user_name = recipient_user_id or recipient_email or "User"
+            if recipient_user_id is not None and prisma_client is not None:
+                user_row = await prisma_client.db.litellm_usertable.find_unique(where={"user_id": recipient_user_id})
+                if user_row is not None:
+                    user_name = user_row.user_alias or user_row.user_id or recipient_email or "User"
+                    
+            base_url = os.getenv("PROXY_BASE_URL", "http://0.0.0.0:4000")
+            app_name = os.getenv("UI_CUSTOM_BRAND_NAME", "LiteLLM")
+
+            if os.getenv("EMAIL_INCLUDE_API_KEY", "true").lower() == "false":
+                key_display_html = f"""
+                <div class="security-notice" style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 16px; margin: 24px 0;">
+                    <p style="margin: 0; color: #b45309; font-weight: 600;">🔒 Security Notice</p>
+                    <p style="margin: 8px 0 0 0; font-size: 14px; color: #92400e;">For security reasons, your API key details are not transmitted via email. Please log in to your dashboard at <a href="{base_url}">{base_url}</a> to view or rotate your keys.</p>
+                </div>
+                """
+            else:
+                key_display_html = f"""
+                <div class="key-container">
+                    <div class="key-label">Your API Key ID (Hash)</div>
+                    <div class="key">{key_token}</div>
+                </div>
+                
+                <div class="security-notice" style="background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 16px; margin: 24px 0;">
+                    <p style="margin: 0; color: #0369a1; font-weight: 600;">ℹ️ Security Information</p>
+                    <p style="margin: 8px 0 0 0; font-size: 14px; color: #075985;">The actual secret API key was displayed to you securely during generation and is not transmitted here. The string above is simply your Key ID (Hash) for tracking purposes.</p>
+                </div>
+                
+                <h2>Action Required</h2>
+                <p>Update your applications and systems with the new API key. Here's an example. Replace the masked key below with your actual secret key:</p>
+                
+                <div class="code-block">
+<span class="code-keyword">import</span> openai<br>
+<br>
+client = openai.OpenAI(<br>
+&nbsp;&nbsp;api_key=<span class="code-string">"sk-xxxx...xxxx"</span>,<br>
+&nbsp;&nbsp;base_url=<span class="code-string">"{base_url}"</span><br>
+)<br>
+<br>
+response = client.chat.completions.create(<br>
+&nbsp;&nbsp;model=<span class="code-string">"gpt-3.5-turbo"</span>, <span class="code-comment"># model to send to the proxy</span><br>
+&nbsp;&nbsp;messages = [<br>
+&nbsp;&nbsp;&nbsp;&nbsp;{{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-string">"role"</span>: <span class="code-string">"user"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-string">"content"</span>: <span class="code-string">"this is a test request, write a short poem"</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;}}<br>
+&nbsp;&nbsp;]<br>
+)
+                </div>
+                """
+                
+            # Format Budget
+            try:
+                display_budget = "Unlimited" if not key_budget or float(key_budget) <= 0 else key_budget
+            except Exception:
+                display_budget = "Unlimited"
+                
+            # Get Team Alias
+            team_id = getattr(webhook_event, "team_id", None)
+            team_name = getattr(webhook_event, "team_alias", None)
+            if team_name is None and team_id is not None and prisma_client is not None:
+                try:
+                    team_row = await prisma_client.db.litellm_teamtable.find_unique(where={"team_id": team_id})
+                    if team_row is not None:
+                        team_name = team_row.team_alias
+                except Exception:
+                    pass
+            team_name = team_name or team_id or "Default Team"
+            
+            # Organization Row
+            org_id = getattr(webhook_event, "organization_id", None)
+            org_row = ""
+            if org_id and str(org_id).strip().lower().replace(" ", "_") not in ["default", "default_org", ""]:
+                org_row = f"""
+                    <tr>
+                        <td style="padding: 4px 0; color: #64748b;">Organization</td>
+                        <td style="padding: 4px 0; font-weight: 500;">{org_id}</td>
+                    </tr>
+                """
+                
+            budget_info_html = f"""
+            <div class="budget-info">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="padding: 4px 0; color: #64748b; width: 120px;">Key Alias</td>
+                        <td style="padding: 4px 0; font-weight: 500;">{getattr(webhook_event, "key_alias", None) or "None provided"}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px 0; color: #64748b;">Team</td>
+                        <td style="padding: 4px 0; font-weight: 500;">{team_name}</td>
+                    </tr>
+                    {org_row}
+                    <tr>
+                        <td style="padding: 4px 0; color: #64748b;">Monthly Budget</td>
+                        <td style="padding: 4px 0; font-weight: 500;">{display_budget}</td>
+                    </tr>
+                </table>
+            </div>
+            """
+
+            email_html_content = MODERN_KEY_ROTATED_EMAIL_TEMPLATE.format(
+                app_name=app_name,
+                email_logo_url=email_logo_url,
+                recipient_email=recipient_email,
+                user_name=user_name,
+                budget_info_html=budget_info_html,
+                key_display_html=key_display_html,
+                base_url=base_url,
+                email_support_contact=email_support_contact,
+                email_footer=os.getenv("EMAIL_SIGNATURE", ""),
+            )
+
+            email_subject = os.getenv("EMAIL_SUBJECT_KEY_ROTATED", f"{app_name}: {event_name}")
+
+            email_event = {
+                "to": recipient_email,
+                "subject": email_subject,
+                "html": email_html_content,
+            }
+
+            await send_email(
+                receiver_email=email_event["to"],
+                subject=email_event["subject"],
+                html=email_event["html"],
+            )
+
+            return True
+
+        except Exception as e:
+            verbose_proxy_logger.error("Error sending key rotated email alert %s", str(e))
             return False
 
     async def send_email_alert_using_smtp(
@@ -1330,6 +1635,8 @@ Model Info:
         recipient_email = webhook_event.user_email
         user_name = webhook_event.user_id
         max_budget = webhook_event.max_budget
+        base_url = os.getenv("PROXY_BASE_URL", "http://0.0.0.0:4000")
+        app_name = os.getenv("UI_CUSTOM_BRAND_NAME", "LiteLLM")
         email_html_content = "Alert from LiteLLM Server"
         if recipient_email is None:
             verbose_proxy_logger.error(
@@ -1337,25 +1644,35 @@ Model Info:
             )
 
         if webhook_event.event == "budget_crossed":
-            email_html_content = f"""
-            <img src="{email_logo_url}" alt="LiteLLM Logo" width="150" height="50" />
-
-            <p> Hi {user_name}, <br/>
-
-            Your LLM API usage this month has reached your account's <b> monthly budget of ${max_budget} </b> <br /> <br />
-
-            API requests will be rejected until either (a) you increase your monthly budget or (b) your monthly usage resets at the beginning of the next calendar month. <br /> <br />
-
-            If you have any questions, please send an email to {email_support_contact} <br /> <br />
-
-            Best, <br />
-            The LiteLLM team <br />
-            """
+            email_html_content = MODERN_BUDGET_CROSSED_EMAIL_TEMPLATE.format(
+                app_name=app_name,
+                email_logo_url=email_logo_url,
+                recipient_name=user_name,
+                team_info="",
+                current_spend=webhook_event.spend,
+                max_budget=max_budget,
+                base_url=base_url,
+                email_support_contact=email_support_contact,
+                email_footer=os.getenv("EMAIL_SIGNATURE", ""),
+            )
+        elif webhook_event.event == "soft_budget_crossed":
+            email_html_content = MODERN_SOFT_BUDGET_CROSSED_EMAIL_TEMPLATE.format(
+                app_name=app_name,
+                email_logo_url=email_logo_url,
+                recipient_name=user_name,
+                team_info="",
+                current_spend=webhook_event.spend,
+                soft_budget=max_budget,
+                max_budget_info=f"<p><strong>Max Budget Limit:</strong> {webhook_event.max_budget}</p>",
+                base_url=base_url,
+                email_support_contact=email_support_contact,
+                email_footer=os.getenv("EMAIL_SIGNATURE", ""),
+            )
 
         webhook_event.model_dump_json()
         email_event = {
             "to": recipient_email,
-            "subject": f"LiteLLM: {event_name}",
+            "subject": f"{app_name}: {event_name}",
             "html": email_html_content,
         }
 
