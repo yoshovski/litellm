@@ -28,11 +28,22 @@ docker network create --internal "$network_name" >/dev/null
 docker run -d --name "$database_name" --network "$network_name" \
   --memory 1g -e POSTGRES_PASSWORD=ci-prisma-only -e POSTGRES_DB=litellm \
   postgres:15-alpine@sha256:b3968e348b48f1198cc6de6611d055dbad91cd561b7990c406c3fc28d7095b21 >/dev/null
-for attempt in $(seq 1 30); do
-  if docker exec "$database_name" pg_isready -U postgres >/dev/null 2>&1; then break; fi
+database_ready=0
+for attempt in $(seq 1 60); do
+  # Initialization uses a temporary Unix-socket server; wait for the final TCP server.
+  if docker exec "$database_name" pg_isready -h 127.0.0.1 -U postgres -d litellm >/dev/null 2>&1; then
+    database_ready=1
+    break
+  fi
+  if [ "$(docker inspect --format '{{.State.Running}}' "$database_name")" != true ]; then break; fi
   sleep 1
 done
-docker exec "$database_name" createdb -U postgres engine_test
+if [ "$database_ready" != 1 ]; then
+  docker logs "$database_name"
+  echo 'FAIL PostgreSQL did not become TCP-ready' >&2
+  exit 1
+fi
+docker exec "$database_name" createdb -h 127.0.0.1 -U postgres engine_test
 fixture_url="postgresql://postgres:ci-prisma-only@$database_name:5432/engine_test"
 docker run --rm --network "$network_name" --cap-drop ALL --security-opt no-new-privileges \
   -e DATABASE_URL="$fixture_url" --entrypoint prisma "$image" db push --schema=/app/schema.prisma --skip-generate
