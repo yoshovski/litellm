@@ -22,6 +22,8 @@ RUN apk add --no-cache "ca-certificates-bundle>=20260909-r3" \
     python-3.13 \
     python-3.13-dev \
     openssl \
+    libssl3 \
+    libcrypto3 \
     openssl-dev \
     "nodejs-26>=26.12.1" \
     npm \
@@ -72,7 +74,7 @@ FROM $LITELLM_RUNTIME_IMAGE AS runtime
 
 USER root
 
-RUN apk add --no-cache "ca-certificates-bundle>=20260909-r3" bash openssl tzdata "nodejs-26>=26.12.1" npm python-3.13 libsndfile && \
+RUN apk add --no-cache "ca-certificates-bundle>=20260909-r3" bash openssl libssl3 libcrypto3 tzdata "nodejs-26>=26.12.1" npm python-3.13 libsndfile && \
     npm install -g npm@11.14.0 tar@7.5.11 glob@13.0.6 @isaacs/brace-expansion@5.0.1 brace-expansion@5.0.5 minimatch@10.2.4 diff@8.0.3 picomatch@4.0.4 && \
     GLOBAL="$(npm root -g)" && \
     for pkg in tar glob @isaacs/brace-expansion brace-expansion minimatch diff picomatch; do \

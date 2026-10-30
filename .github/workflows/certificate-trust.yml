@@ -8,6 +8,8 @@ on:
       - "**/uv.lock"
       - "**/requirements*.txt"
       - "scripts/check_certificate_trust.py"
+      - "scripts/check_proxy_database.sh"
+      - "tests/litellm/test_proxy_database_smoke.py"
       - ".github/workflows/certificate-trust.yml"
   workflow_dispatch:
 
@@ -34,6 +36,8 @@ jobs:
             system_python: /usr/bin/python3
     steps:
       - uses: actions/checkout@v5
+      - name: Check database startup regression tests
+        run: python3 tests/litellm/test_proxy_database_smoke.py
       - uses: docker/setup-buildx-action@v3
       - name: Build the runtime image with fresh base layers
         uses: docker/build-push-action@v6
@@ -73,3 +77,7 @@ jobs:
             --entrypoint ${{ matrix.system_python }} \
             --volume "$PWD/scripts/check_certificate_trust.py:/check.py:ro" \
             local/certificate-trust:${{ matrix.name }} /check.py --online ${{ matrix.system_arguments }}
+
+      - name: Verify Prisma engines, migrations and proxy database startup
+        timeout-minutes: 10
+        run: bash scripts/check_proxy_database.sh local/certificate-trust:${{ matrix.name }}
