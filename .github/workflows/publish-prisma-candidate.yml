@@ -1,0 +1,82 @@
+name: Publish corrected Prisma certificate candidate
+
+on:
+  push:
+    branches:
+      - ci/publish-certfix-20261030-pr3
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-certfix-20261030-pr3
+  cancel-in-progress: false
+
+env:
+  SOURCE_SHA: a95c0b117309c52ec572fd2b7f6841b631771b19
+  CANDIDATE_IMAGE: ghcr.io/yoshovski/litellm:certfix-20261030-pr3-a95c0b117
+  TESTED_IMAGE: local/litellm:prisma-candidate
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+      - name: Check database startup regression tests
+        run: python3 tests/litellm/test_proxy_database_smoke.py
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the corrected runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          pull: true
+          no-cache: true
+          load: true
+          push: false
+          tags: ${{ env.TESTED_IMAGE }}
+          labels: |
+            org.opencontainers.image.revision=${{ env.SOURCE_SHA }}
+            org.opencontainers.image.source=https://github.com/yoshovski/litellm
+            org.opencontainers.image.version=certfix-20261030-pr3-a95c0b117
+      - name: Check application and base certificate trust offline and online
+        timeout-minutes: 5
+        run: |
+          for interpreter in python /usr/bin/python3; do
+            arguments=()
+            if [ "$interpreter" = python ]; then arguments+=(--require-certifi); fi
+            docker run --rm --read-only --network none --cap-drop ALL \
+              --security-opt no-new-privileges --entrypoint "$interpreter" \
+              --volume "$PWD/scripts/check_certificate_trust.py:/check.py:ro" \
+              "$TESTED_IMAGE" /check.py "${arguments[@]}"
+            docker run --rm --read-only --cap-drop ALL \
+              --security-opt no-new-privileges --entrypoint "$interpreter" \
+              --volume "$PWD/scripts/check_certificate_trust.py:/check.py:ro" \
+              "$TESTED_IMAGE" /check.py --online "${arguments[@]}"
+          done
+      - name: Verify Prisma engines, migrations and real proxy database startup
+        timeout-minutes: 10
+        run: bash scripts/check_proxy_database.sh "$TESTED_IMAGE"
+      - name: Log in after all checks pass
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish the exact tested image under its separate candidate tag
+        run: |
+          docker tag "$TESTED_IMAGE" "$CANDIDATE_IMAGE"
+          docker push "$CANDIDATE_IMAGE"
+          docker buildx imagetools inspect "$CANDIDATE_IMAGE"
+          {
+            echo "### Corrected lab candidate"
+            echo "Image: \`$CANDIDATE_IMAGE\`"
+            echo "Source: \`$SOURCE_SHA\`"
+            echo 'Certificate, Prisma engine, database and proxy checks passed before publication.'
+            echo 'No latest tag or deployment was changed.'
+          } >> "$GITHUB_STEP_SUMMARY"
