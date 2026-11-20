@@ -5,6 +5,10 @@ on:
     branches: ['custom-v1.*']
     tags: ['v*-custom-v*']
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     if: github.repository == 'yoshovski/litellm'
@@ -26,11 +30,12 @@ jobs:
         run: |
           image_tag="$GITHUB_REF_NAME"
           release_tag=""
+          commit_subject="${COMMIT_MESSAGE%%$'\n'*}"
 
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             release_tag="$GITHUB_REF_NAME"
-          elif [[ "$COMMIT_MESSAGE" == "release: publish "* ]]; then
-            release_tag="${COMMIT_MESSAGE#release: publish }"
+          elif [[ "$commit_subject" == "release: publish "* ]]; then
+            release_tag="${commit_subject#release: publish }"
             if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-custom-v[1-9][0-9]*$ ]]; then
               echo "Expected a release tag such as v1.110.2-custom-v1" >&2
               exit 1
@@ -66,6 +71,11 @@ jobs:
         run: |
           # A tag from this workflow's token does not trigger another workflow run.
           endpoint="repos/$GITHUB_REPOSITORY/git"
+          branch_sha=$(gh api "$endpoint/ref/heads/$GITHUB_REF_NAME" --jq .object.sha)
+          if [[ "$branch_sha" != "$GITHUB_SHA" ]]; then
+            echo "Release branch moved to $branch_sha during the build" >&2
+            exit 1
+          fi
           if existing_sha=$(gh api "$endpoint/ref/tags/$RELEASE_TAG" --jq .object.sha); then
             if [[ "$existing_sha" != "$GITHUB_SHA" ]]; then
               echo "Tag $RELEASE_TAG already points at $existing_sha" >&2
