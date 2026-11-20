@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
-      contents: write
+      contents: read
       packages: write
     env:
       IMAGE: ghcr.io/yoshovski/litellm
@@ -52,7 +52,11 @@ jobs:
       - name: Build image
         env:
           IMAGE_TAG: ${{ steps.version.outputs.image_tag }}
-        run: docker build --build-arg "LITELLM_RELEASE_TAG=$IMAGE_TAG" --tag "$IMAGE:$IMAGE_TAG" .
+        run: |
+          docker build --build-arg "LITELLM_RELEASE_TAG=$IMAGE_TAG" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --tag "$IMAGE:$IMAGE_TAG" .
       - name: Check certificate stores
         env:
           IMAGE_TAG: ${{ steps.version.outputs.image_tag }}
@@ -63,26 +67,27 @@ jobs:
         env:
           IMAGE_TAG: ${{ steps.version.outputs.image_tag }}
         run: bash scripts/check_proxy_database.sh "$IMAGE:$IMAGE_TAG"
-      - name: Create release tag
-        if: github.ref_type == 'branch' && steps.version.outputs.release_tag != ''
+      - name: Verify release source
+        if: steps.version.outputs.release_tag != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         run: |
-          # A tag from this workflow's token does not trigger another workflow run.
-          endpoint="repos/$GITHUB_REPOSITORY/git"
-          branch_sha=$(gh api "$endpoint/ref/heads/$GITHUB_REF_NAME" --jq .object.sha)
-          if [[ "$branch_sha" != "$GITHUB_SHA" ]]; then
-            echo "Release branch moved to $branch_sha during the build" >&2
-            exit 1
-          fi
-          if existing_sha=$(gh api "$endpoint/ref/tags/$RELEASE_TAG" --jq .object.sha); then
-            if [[ "$existing_sha" != "$GITHUB_SHA" ]]; then
-              echo "Tag $RELEASE_TAG already points at $existing_sha" >&2
+          tag_ref="refs/tags/$RELEASE_TAG"
+          refs=$(git ls-remote origin "$GITHUB_REF" "$tag_ref" "${tag_ref}^{}")
+          tag_sha=$(awk -v ref="$tag_ref" '$2 == ref {sha=$1} $2 == ref "^{}" {peeled=$1} END {print (peeled ? peeled : sha)}' <<< "$refs")
+          if [[ "$GITHUB_REF_TYPE" == "branch" ]]; then
+            branch_sha=$(awk -v ref="$GITHUB_REF" '$2 == ref {print $1}' <<< "$refs")
+            if [[ "$branch_sha" != "$GITHUB_SHA" ]]; then
+              echo "Release branch changed during the build" >&2
               exit 1
             fi
-          else
-            gh api --method POST "$endpoint/refs" -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$GITHUB_SHA" --silent
+          elif [[ -z "$tag_sha" ]]; then
+            echo "Release tag disappeared during the build" >&2
+            exit 1
+          fi
+          if [[ -n "$tag_sha" && "$tag_sha" != "$GITHUB_SHA" ]]; then
+            echo "Tag $RELEASE_TAG points at $tag_sha" >&2
+            exit 1
           fi
       - name: Publish verified image
         if: steps.version.outputs.release_tag != ''
