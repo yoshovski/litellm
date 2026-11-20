@@ -6,6 +6,7 @@ Base class for sending emails to user after creating keys or invite links
 import html
 import json
 import os
+from html import escape
 from typing import Final, List, Literal, Optional
 
 from litellm_enterprise.types.enterprise_callbacks.send_emails import (
@@ -121,7 +122,7 @@ class BaseEmailLogger(CustomLogger):
             from_email=self.DEFAULT_LITELLM_EMAIL,
             to_email=[email_params.recipient_email],
             subject=email_params.subject,
-            html_body=email_html_content,
+            html_body=email_html_content.replace("LiteLLM", escape(os.getenv("UI_CUSTOM_BRAND_NAME") or "LiteLLM")),
         )
 
         pass
@@ -169,7 +170,7 @@ class BaseEmailLogger(CustomLogger):
             from_email=self.DEFAULT_LITELLM_EMAIL,
             to_email=[email_params.recipient_email],
             subject=email_params.subject,
-            html_body=email_html_content,
+            html_body=email_html_content.replace("LiteLLM", escape(os.getenv("UI_CUSTOM_BRAND_NAME") or "LiteLLM")),
         )
         pass
 
@@ -216,7 +217,7 @@ class BaseEmailLogger(CustomLogger):
             from_email=self.DEFAULT_LITELLM_EMAIL,
             to_email=[email_params.recipient_email],
             subject=email_params.subject,
-            html_body=email_html_content,
+            html_body=email_html_content.replace("LiteLLM", escape(os.getenv("UI_CUSTOM_BRAND_NAME") or "LiteLLM")),
         )
         pass
 
@@ -258,7 +259,7 @@ class BaseEmailLogger(CustomLogger):
             from_email=self.DEFAULT_LITELLM_EMAIL,
             to_email=[email_params.recipient_email],
             subject=email_params.subject,
-            html_body=email_html_content,
+            html_body=email_html_content.replace("LiteLLM", escape(os.getenv("UI_CUSTOM_BRAND_NAME") or "LiteLLM")),
         )
         pass
 
@@ -333,7 +334,7 @@ class BaseEmailLogger(CustomLogger):
             from_email=self.DEFAULT_LITELLM_EMAIL,
             to_email=recipient_emails,
             subject=email_params.subject,
-            html_body=email_html_content,
+            html_body=email_html_content.replace("LiteLLM", escape(os.getenv("UI_CUSTOM_BRAND_NAME") or "LiteLLM")),
         )
         pass
 
@@ -414,7 +415,7 @@ class BaseEmailLogger(CustomLogger):
                 from_email=self.DEFAULT_LITELLM_EMAIL,
                 to_email=recipient_emails,
                 subject=email_params.subject,
-                html_body=email_html_content,
+                html_body=email_html_content.replace("LiteLLM", escape(os.getenv("UI_CUSTOM_BRAND_NAME") or "LiteLLM")),
             )
         else:
             # Old path: single recipient resolved from user_id/user_email
@@ -439,7 +440,7 @@ class BaseEmailLogger(CustomLogger):
                 from_email=self.DEFAULT_LITELLM_EMAIL,
                 to_email=[email_params.recipient_email],
                 subject=email_params.subject,
-                html_body=email_html_content,
+                html_body=email_html_content.replace("LiteLLM", escape(os.getenv("UI_CUSTOM_BRAND_NAME") or "LiteLLM")),
             )
 
     @with_service_target(_BUDGET_ALERT_CLAIMS_TARGET)
@@ -792,6 +793,10 @@ class BaseEmailLogger(CustomLogger):
             if event_message
             else "LiteLLM Notification"
         )
+
+        app_name = os.getenv("UI_CUSTOM_BRAND_NAME") or "LiteLLM"
+        if subject.startswith("LiteLLM"):
+            subject = subject.replace("LiteLLM", app_name, 1)
 
         recipient_email: Optional[str] = (
             user_email or await self._lookup_user_email_from_db(user_id=user_id)

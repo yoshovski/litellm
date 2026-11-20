@@ -3,6 +3,7 @@
 import asyncio
 import datetime
 import os
+from html import escape
 import random
 import time
 from collections.abc import Callable
@@ -38,6 +39,7 @@ from litellm.llms.custom_httpx.http_handler import (
     get_async_httpx_client,
     httpxSpecialProvider,
 )
+from litellm.repositories.organization_repository import OrganizationRepository
 from litellm.repositories.table_repositories import InvitationLinkRepository
 from litellm.repositories.team_repository import TeamRepository
 from litellm.repositories.user_repository import UserRepository
@@ -57,6 +59,13 @@ from litellm.types.proxy.model_deprecation import (
     DEPRECATION_IDLE_POLL_SECONDS,
 )
 
+from ..email_templates.smtp_templates import (
+    BUDGET_CROSSED_EMAIL_TEMPLATE as SMTP_BUDGET_CROSSED_EMAIL_TEMPLATE,
+    KEY_CREATED_EMAIL_TEMPLATE as SMTP_KEY_CREATED_EMAIL_TEMPLATE,
+    KEY_ROTATED_EMAIL_TEMPLATE as SMTP_KEY_ROTATED_EMAIL_TEMPLATE,
+    SOFT_BUDGET_CROSSED_EMAIL_TEMPLATE as SMTP_SOFT_BUDGET_CROSSED_EMAIL_TEMPLATE,
+    USER_INVITATION_EMAIL_TEMPLATE as SMTP_USER_INVITATION_EMAIL_TEMPLATE,
+)
 from ..email_templates.templates import *
 from .batching_handler import send_to_webhook, squash_payloads
 from .ms_teams import (
@@ -1276,96 +1285,101 @@ Model Info:
         return f"{base_url.rstrip('/')}/ui/onboarding?invitation_id={invitation.id}"
 
     async def send_key_created_or_user_invited_email(self, webhook_event: WebhookEvent) -> bool:
+        from litellm.proxy.proxy_server import premium_user, prisma_client
+        from litellm.proxy.utils import hash_token, send_email
+
+        if self.alerting is None or "email" not in self.alerting:
+            return False
         try:
-            from litellm.proxy.utils import send_email
+            logo_url: Final = os.getenv("SMTP_SENDER_LOGO") or os.getenv("EMAIL_LOGO_URL")
+            support_contact: Final = os.getenv("EMAIL_SUPPORT_CONTACT")
+            await self._check_if_using_premium_email_feature(premium_user, logo_url, support_contact)
 
-            if self.alerting is None or "email" not in self.alerting:
-                # do nothing if user does not want email alerts
-                verbose_proxy_logger.error(
-                    "Error sending email alert - 'email' not in self.alerting %s",
-                    self.alerting,
-                )
+            user_id: Final = webhook_event.user_id
+            user: Final = (
+                await UserRepository(prisma_client).table.find_unique(where={"user_id": user_id})
+                if prisma_client is not None and user_id is not None
+                else None
+            )
+            recipient: Final = webhook_event.user_email or (user.user_email if user is not None else None)
+            if recipient is None:
+                verbose_proxy_logger.warning("Skipping SMTP notification without a recipient")
                 return False
-            from litellm.proxy.proxy_server import premium_user, prisma_client
 
-            email_logo_url = os.getenv("SMTP_SENDER_LOGO", os.getenv("EMAIL_LOGO_URL", None))
-            email_support_contact = os.getenv("EMAIL_SUPPORT_CONTACT", None)
-            await self._check_if_using_premium_email_feature(premium_user, email_logo_url, email_support_contact)
-            if email_logo_url is None:
-                email_logo_url = LITELLM_LOGO_URL
-            if email_support_contact is None:
-                email_support_contact = LITELLM_SUPPORT_CONTACT
-
-            event_name: Final = webhook_event.event_message
-            recipient_email = webhook_event.user_email
-            recipient_user_id: Final = webhook_event.user_id
-            if recipient_email is None and recipient_user_id is not None and prisma_client is not None:
-                user_row = await UserRepository(prisma_client).table.find_unique(where={"user_id": recipient_user_id})
-
-                if user_row is not None:
-                    recipient_email = user_row.user_email
-
-            key_token: Final = webhook_event.token
-            key_budget: Final = webhook_event.max_budget
-            base_url: Final = os.getenv("PROXY_BASE_URL", "http://0.0.0.0:4000")
-
-            email_html_content = "Alert from LiteLLM Server"
-            if recipient_email is None:
-                verbose_proxy_logger.error(
-                    "Trying to send email alert to no recipient",
-                    extra=webhook_event.dict(),
-                )
-
-            if webhook_event.event == "key_created":
-                email_html_content = KEY_CREATED_EMAIL_TEMPLATE.format(
-                    email_logo_url=email_logo_url,
-                    recipient_email=recipient_email,
-                    key_budget=key_budget,
-                    key_token=key_token,
-                    base_url=base_url,
-                    email_support_contact=email_support_contact,
-                )
-            elif webhook_event.event == "internal_user_created":
-                # GET TEAM NAME
-                team_id: Final = webhook_event.team_id
-                team_name = "Default Team"
-                if team_id is not None and prisma_client is not None:
-                    team_row: Final = await TeamRepository(prisma_client).table.find_unique(where={"team_id": team_id})
-                    if team_row is not None:
-                        team_name = team_row.team_alias or "-"
-                invitation_link: Final = await self._construct_user_invitation_link(
-                    recipient_user_id=recipient_user_id, base_url=base_url
-                )
-                email_html_content = USER_INVITED_EMAIL_TEMPLATE.format(
-                    email_logo_url=email_logo_url,
-                    recipient_email=recipient_email,
-                    team_name=team_name,
-                    base_url=invitation_link,
-                    email_support_contact=email_support_contact,
-                )
-            else:
-                verbose_proxy_logger.error(
-                    "Trying to send email alert on unknown webhook event",
-                    extra=webhook_event.model_dump(),
-                )
-
-            webhook_event.model_dump_json()
-            email_event: Final = {
-                "to": recipient_email,
-                "subject": f"LiteLLM: {event_name}",
-                "html": email_html_content,
+            app_name: Final = os.getenv("UI_CUSTOM_BRAND_NAME") or "LiteLLM"
+            base_url: Final = os.getenv("PROXY_BASE_URL", "http://0.0.0.0:4000").rstrip("/")
+            shared: Final = {
+                "app_name": escape(app_name),
+                "email_logo_url": escape(logo_url or LITELLM_LOGO_URL),
+                "email_support_contact": escape(support_contact or LITELLM_SUPPORT_CONTACT),
+                "email_footer": os.getenv("EMAIL_SIGNATURE", ""),
             }
+            match webhook_event.event:
+                case "internal_user_created":
+                    invitation_link: Final = await self._construct_user_invitation_link(user_id, base_url)
+                    html_body, subject_var = (
+                        SMTP_USER_INVITATION_EMAIL_TEMPLATE.format(**shared, base_url=escape(invitation_link)),
+                        "EMAIL_SUBJECT_INVITATION",
+                    )
+                case "key_created" | "key_rotated":
+                    team_id: Final = webhook_event.team_id
+                    organization_id: Final = webhook_event.organization_id
+                    team: Final = (
+                        await TeamRepository(prisma_client).table.find_unique(where={"team_id": team_id})
+                        if prisma_client is not None and team_id is not None
+                        else None
+                    )
+                    organization: Final = (
+                        await OrganizationRepository(prisma_client).table.find_unique(
+                            where={"organization_id": organization_id}
+                        )
+                        if prisma_client is not None and organization_id is not None
+                        else None
+                    )
+                    rows: Final = (
+                        ("Key alias", webhook_event.key_alias or "None provided"),
+                        ("Team", webhook_event.team_alias or (team.team_alias if team is not None else None)
+                         or team_id or "Default Team"),
+                        ("Organization", organization.organization_alias if organization is not None else organization_id),
+                        ("Monthly budget", f"${webhook_event.max_budget:g}" if webhook_event.max_budget else "Unlimited"),
+                    )
+                    summary: Final = "".join(
+                        f"<p><strong>{label}:</strong> {escape(value)}</p>"
+                        for label, value in rows if value
+                    )
+                    key_id: Final = (
+                        hash_token(webhook_event.token)
+                        if webhook_event.token and webhook_event.token.startswith("sk-")
+                        else webhook_event.token
+                    )
+                    key_details: Final = (
+                        f'<div class="key-container"><p>API key ID</p><code>{escape(key_id)}</code></div>'
+                        if key_id and os.getenv("EMAIL_INCLUDE_API_KEY", "true").lower() != "false"
+                        else "<p>Sign in to your dashboard to manage the key.</p>"
+                    )
+                    rotated: Final = webhook_event.event == "key_rotated"
+                    template: Final = SMTP_KEY_ROTATED_EMAIL_TEMPLATE if rotated else SMTP_KEY_CREATED_EMAIL_TEMPLATE
+                    user_name: Final = webhook_event.user_alias or (user.user_alias if user is not None else None)
+                    html_body, subject_var = (
+                        template.format(
+                            **shared,
+                            user_name=escape(user_name or user_id or recipient),
+                            budget_info_html=f'<div class="budget-info">{summary}</div>',
+                            key_display_html=key_details,
+                        ),
+                        "EMAIL_SUBJECT_KEY_ROTATED" if rotated else "EMAIL_SUBJECT_KEY_CREATED",
+                    )
+                case _:
+                    return False
 
             await send_email(
-                receiver_email=email_event["to"],
-                subject=email_event["subject"],
-                html=email_event["html"],
+                receiver_email=recipient,
+                subject=os.getenv(subject_var) or f"{app_name}: {webhook_event.event_message}",
+                html=html_body,
             )
-
             return True
-
-        except Exception as e:
-            verbose_proxy_logger.error("Error sending email alert %s", str(e))
+        except Exception:
+            verbose_proxy_logger.exception("Error sending SMTP notification")
             return False
 
     async def send_email_alert_using_smtp(self, webhook_event: WebhookEvent, alert_type: str) -> bool:
@@ -1388,42 +1402,28 @@ Model Info:
         if email_support_contact is None:
             email_support_contact = LITELLM_SUPPORT_CONTACT
 
-        event_name: Final = webhook_event.event_message
-        recipient_email: Final = webhook_event.user_email
-        user_name: Final = webhook_event.user_id
-        max_budget: Final = webhook_event.max_budget
-        email_html_content = "Alert from LiteLLM Server"
-        if recipient_email is None:
-            verbose_proxy_logger.error("Trying to send email alert to no recipient", extra=webhook_event.dict())
-
-        if webhook_event.event == "budget_crossed":
-            email_html_content = f"""
-            <img src="{email_logo_url}" alt="LiteLLM Logo" width="150" height="50" />
-
-            <p> Hi {user_name}, <br/>
-
-            Your LLM API usage this month has reached your account's <b> monthly budget of ${max_budget} </b> <br /> <br />
-
-            API requests will be rejected until either (a) you increase your monthly budget or (b) your monthly usage resets at the beginning of the next calendar month. <br /> <br />
-
-            If you have any questions, please send an email to {email_support_contact} <br /> <br />
-
-            Best, <br />
-            The LiteLLM team <br />
-            """
-
-        webhook_event.model_dump_json()
-        email_event: Final = {
-            "to": recipient_email,
-            "subject": f"LiteLLM: {event_name}",
-            "html": email_html_content,
-        }
-
-        await send_email(
-            receiver_email=email_event["to"],
-            subject=email_event["subject"],
-            html=email_event["html"],
+        recipient: Final = webhook_event.user_email
+        app_name: Final = os.getenv("UI_CUSTOM_BRAND_NAME") or "LiteLLM"
+        template: Final = (
+            SMTP_SOFT_BUDGET_CROSSED_EMAIL_TEMPLATE
+            if webhook_event.event == "soft_budget_crossed"
+            else SMTP_BUDGET_CROSSED_EMAIL_TEMPLATE
         )
+        if recipient is not None:
+            html_body: Final = template.format(
+                app_name=escape(app_name),
+                email_logo_url=escape(email_logo_url),
+                recipient_name=escape(webhook_event.user_alias or webhook_event.user_id or recipient),
+                team_info="",
+                current_spend=webhook_event.spend,
+                max_budget=webhook_event.max_budget,
+                soft_budget=webhook_event.soft_budget or webhook_event.max_budget,
+                max_budget_info=(f"<p>Maximum budget: ${webhook_event.max_budget:g}</p>" if webhook_event.max_budget else ""),
+                base_url=escape(os.getenv("PROXY_BASE_URL", "http://0.0.0.0:4000")),
+                email_support_contact=escape(email_support_contact),
+                email_footer=os.getenv("EMAIL_SIGNATURE", ""),
+            )
+            await send_email(receiver_email=recipient, subject=f"{app_name}: {webhook_event.event_message}", html=html_body)
         if webhook_event.event_group == Litellm_EntityType.TEAM:
             from litellm.integrations.email_alerting import send_team_budget_alert
 

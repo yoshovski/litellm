@@ -21,6 +21,7 @@ const UIThemeSettings: React.FC<UIThemeSettingsProps> = ({ userID, userRole, acc
   const [logoUrlInput, setLogoUrlInput] = useState<string>("");
   const [logoUrlDarkInput, setLogoUrlDarkInput] = useState<string>("");
   const [faviconUrlInput, setFaviconUrlInput] = useState<string>("");
+  const [emailBrandName, setEmailBrandName] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -46,6 +47,7 @@ const UIThemeSettings: React.FC<UIThemeSettingsProps> = ({ userID, userRole, acc
         setLogoUrlInput(data.values?.logo_url || "");
         setLogoUrlDarkInput(data.values?.logo_url_dark || "");
         setFaviconUrlInput(data.values?.favicon_url || "");
+        setEmailBrandName(data.values?.email_brand_name || "");
         setLogoUrl(images.logoUrl);
         setLogoUrlDark(images.logoUrlDark);
         setFaviconUrl(images.faviconUrl);
@@ -70,6 +72,7 @@ const UIThemeSettings: React.FC<UIThemeSettingsProps> = ({ userID, userRole, acc
           logo_url: logoUrlInput || null,
           logo_url_dark: logoUrlDarkInput || null,
           favicon_url: faviconUrlInput || null,
+          email_brand_name: emailBrandName.trim() || null,
         }),
       });
       if (response.ok) {
@@ -92,6 +95,7 @@ const UIThemeSettings: React.FC<UIThemeSettingsProps> = ({ userID, userRole, acc
     setLogoUrlInput("");
     setLogoUrlDarkInput("");
     setFaviconUrlInput("");
+    setEmailBrandName("");
     setLogoUrl(null);
     setLogoUrlDark(null);
     setFaviconUrl(null);
@@ -105,7 +109,7 @@ const UIThemeSettings: React.FC<UIThemeSettingsProps> = ({ userID, userRole, acc
           [getGlobalLitellmHeaderName()]: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ logo_url: null, logo_url_dark: null, favicon_url: null }),
+        body: JSON.stringify({ logo_url: null, logo_url_dark: null, favicon_url: null, email_brand_name: null }),
       });
       if (response.ok) {
         toast.success(t("uiTheme.settings.toasts.reset"));
@@ -176,6 +180,16 @@ const UIThemeSettings: React.FC<UIThemeSettingsProps> = ({ userID, userRole, acc
               }}
             />
             <p className="mt-1 text-xs text-muted-foreground">{t("uiTheme.settings.faviconUrl.hint")}</p>
+          </div>
+          <div>
+            <Label htmlFor="ui-theme-email-brand-name" className="mb-2">
+              {t("uiTheme.settings.emailBrandName")}
+            </Label>
+            <Input
+              id="ui-theme-email-brand-name"
+              value={emailBrandName}
+              onChange={(event) => setEmailBrandName(event.target.value)}
+            />
           </div>
           <div className="flex gap-3 pt-4">
             <Button onClick={handleSave} disabled={loading}>

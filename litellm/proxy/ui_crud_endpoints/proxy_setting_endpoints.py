@@ -148,6 +148,7 @@ _UI_THEME_FIELD_ENV_VARS: Final[dict[str, str]] = {
     "logo_url": "UI_LOGO_PATH",
     "logo_url_dark": "UI_LOGO_PATH_DARK",
     "favicon_url": "LITELLM_FAVICON_URL",
+    "email_brand_name": "UI_CUSTOM_BRAND_NAME",
 }
 
 
@@ -177,6 +178,8 @@ def _resolve_ui_theme_field(stored_values: Mapping[str, object], field_name: str
     if isinstance(stored, str) and stored.strip():
         return stored
     env_value: Final = os.environ.get(_UI_THEME_FIELD_ENV_VARS[field_name])
+    if field_name == "email_brand_name":
+        return env_value.strip() if env_value else None
     return env_value if _is_public_http_url(env_value) else None
 
 
@@ -206,6 +209,9 @@ class UIThemeConfig(LiteLLMBaseModel):
         default=None,
         description="URL to custom favicon image. Must be an HTTP/HTTPS URL to a .ico, .png, or .svg file",
     )
+
+
+    email_brand_name: str | None = Field(default=None, description="Brand name shown in notification emails")
 
 
 class SettingsResponse(LiteLLMBaseModel):
@@ -1583,6 +1589,7 @@ async def update_ui_theme_settings(
         "UI_LOGO_PATH": _clean(theme_config.logo_url),
         "UI_LOGO_PATH_DARK": _clean(theme_config.logo_url_dark),
         "LITELLM_FAVICON_URL": _clean(theme_config.favicon_url),
+        "UI_CUSTOM_BRAND_NAME": _clean(theme_config.email_brand_name),
     }
     for env_key, env_value in env_updates.items():
         if env_value is not None:
@@ -1593,7 +1600,7 @@ async def update_ui_theme_settings(
     # Persist the theme config (litellm_settings). save_config defaults to
     # include_env_vars=False, so it does not snapshot environment_variables.
     await proxy_config.save_config(new_config=config)
-    # Persist only the two owned env vars, merged against the existing DB row.
+    # Persist the theme-owned env vars, merged against the existing DB row.
     await proxy_config.save_environment_variables(env_updates)
 
     asyncio.create_task(

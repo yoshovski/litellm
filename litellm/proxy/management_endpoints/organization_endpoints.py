@@ -459,7 +459,7 @@ async def new_organization(
             detail={"error": f"Only admins can create orgs. Your role is = {user_api_key_dict.user_role}"},
         )
 
-    if llm_router is None:
+    if llm_router is None and data.models:
         raise HTTPException(status_code=500, detail={"error": CommonProxyErrors.no_llm_router.value})
 
     # Validate budget values are not negative

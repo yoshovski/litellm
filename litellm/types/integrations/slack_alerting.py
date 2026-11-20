@@ -346,6 +346,7 @@ class CallInfo(LiteLLMPydanticObjectBase):
 
 
 class WebhookEvent(CallInfo):
+    user_alias: str | None = None
     event: Literal[
         "budget_crossed",
         "max_budget_alert",

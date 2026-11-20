@@ -8567,6 +8567,7 @@
   },
   "uiTheme": {
     "settings": {
+      "emailBrandName": "Email brand name",
       "toasts": {
         "updated": "Theme settings updated successfully!",
         "updateFailed": "Failed to update theme settings",

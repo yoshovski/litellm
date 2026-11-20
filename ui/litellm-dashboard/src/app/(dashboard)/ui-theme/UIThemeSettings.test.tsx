@@ -88,8 +88,23 @@ describe("UIThemeSettings", () => {
       logo_url: "https://a.test/logo.png",
       logo_url_dark: null,
       favicon_url: "https://a.test/fav.ico",
+      email_brand_name: null,
     });
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Theme settings updated successfully!"));
+  });
+
+  it("loads and saves the email brand name", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockImplementation(() => okResponse({ email_brand_name: "Existing brand" }));
+    render(<UIThemeSettings userID="user-1" userRole="Admin" accessToken="sk-test" />);
+
+    const input = screen.getByRole("textbox", { name: "Email brand name" });
+    await waitFor(() => expect(input).toHaveValue("Existing brand"));
+    fireEvent.change(input, { target: { value: " Custom Gateway " } });
+    await user.click(screen.getByRole("button", { name: "Save Changes" }));
+
+    await waitFor(() => expect(patchCalls()).toHaveLength(1));
+    expect(bodyOf(patchCalls()[0]).email_brand_name).toBe("Custom Gateway");
   });
 
   it("should load and save a separate dark-mode logo url", async () => {
@@ -133,7 +148,7 @@ describe("UIThemeSettings", () => {
 
       await user.click(screen.getByRole("button", { name: action }));
       await waitFor(() => expect(patchCalls()).toHaveLength(1));
-      expect(bodyOf(patchCalls()[0])).toEqual({ logo_url: null, logo_url_dark: null, favicon_url: null });
+      expect(bodyOf(patchCalls()[0])).toEqual({ logo_url: null, logo_url_dark: null, favicon_url: null, email_brand_name: null });
 
       expect(setLogoUrl).toHaveBeenLastCalledWith(null);
       expect(setLogoUrlDark).toHaveBeenLastCalledWith(null);
@@ -168,7 +183,7 @@ describe("UIThemeSettings", () => {
     await user.click(screen.getByRole("button", { name: "Reset to Default" }));
 
     await waitFor(() => expect(patchCalls()).toHaveLength(1));
-    expect(bodyOf(patchCalls()[0])).toEqual({ logo_url: null, logo_url_dark: null, favicon_url: null });
+    expect(bodyOf(patchCalls()[0])).toEqual({ logo_url: null, logo_url_dark: null, favicon_url: null, email_brand_name: null });
     expect(screen.getByPlaceholderText(LOGO_PLACEHOLDER)).toHaveValue("");
     expect(screen.getByPlaceholderText(LOGO_DARK_PLACEHOLDER)).toHaveValue("");
     expect(screen.getByPlaceholderText(FAVICON_PLACEHOLDER)).toHaveValue("");

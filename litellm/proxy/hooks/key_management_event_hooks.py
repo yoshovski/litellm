@@ -85,7 +85,7 @@ class KeyManagementEventHooks:
             )
 
         # Send email notification - non-blocking, independent operation
-        if data.send_invite_email is True:
+        if data.send_invite_email is not False:
             try:
                 await KeyManagementEventHooks._send_key_created_email(response.model_dump(exclude_none=True))
             except Exception as e:
@@ -543,6 +543,9 @@ class KeyManagementEventHooks:
 
         from litellm.proxy.proxy_server import general_settings, proxy_logging_obj
 
+        if (general_settings.get("email_settings") or {}).get("Virtual Key Created") is False:
+            return
+
         ##########################
         # v2 integration for emails (enterprise)
         ##########################
@@ -589,11 +592,12 @@ class KeyManagementEventHooks:
                 event="key_created",
                 event_group=Litellm_EntityType.KEY,
                 event_message="API Key Created",
-                token=response.get("token", ""),
+                token=response.get("token_id") or response.get("token"),
                 spend=response.get("spend", 0.0),
                 max_budget=response.get("max_budget", 0.0),
                 user_id=response.get("user_id", None),
-                team_id=response.get("team_id", "Default Team"),
+                team_id=response.get("team_id"),
+                organization_id=response.get("organization_id"),
                 key_alias=response.get("key_alias", None),
             )
             # If user configured email alerting - send an Email letting their end-user know the key was created
@@ -604,57 +608,54 @@ class KeyManagementEventHooks:
             )
 
     @staticmethod
-    async def _send_key_rotated_email(response: dict, existing_key_alias: str | None):
-        """
-        Send key rotated email if email sending is enabled.
+    async def _send_key_rotated_email(response: dict[str, object], existing_key_alias: str | None):
+        from litellm.proxy.proxy_server import general_settings, proxy_logging_obj
 
-        This method is non-blocking - it will return silently if email is not
-        configured, and will log warnings instead of raising exceptions on failure.
-        """
-        # Early exit if email is not enabled
         if not KeyManagementEventHooks._is_email_sending_enabled():
-            verbose_proxy_logger.debug("Email sending not enabled, skipping key rotated email")
+            return
+        if (general_settings.get("email_settings") or {}).get("Virtual Key Rotated") is False:
             return
 
         try:
-            from litellm_enterprise.enterprise_callbacks.send_emails.base_email import (
-                BaseEmailLogger,
-            )
+            from litellm_enterprise.enterprise_callbacks.send_emails.base_email import BaseEmailLogger
+            from litellm_enterprise.types.enterprise_callbacks.send_emails import SendKeyRotatedEmailEvent
         except ImportError:
-            # Enterprise package not installed - v0 doesn't support key rotated email
-            verbose_proxy_logger.debug("Enterprise package not installed, skipping key rotated email")
+            verbose_proxy_logger.debug("Enterprise email logger unavailable for key rotation")
+        else:
+            email_loggers: Final = tuple(
+                logger
+                for logger in litellm.logging_callback_manager.get_custom_loggers_for_type(callback_type=BaseEmailLogger)
+                if isinstance(logger, BaseEmailLogger)
+            )
+            if email_loggers:
+                event: Final = SendKeyRotatedEmailEvent.model_validate({
+                    **response,
+                    "virtual_key": response.get("key", ""),
+                    "token": response.get("token_id") or response.get("token"),
+                    "event": "key_rotated",
+                    "event_group": Litellm_EntityType.KEY,
+                    "event_message": "API Key Rotated",
+                    "spend": response.get("spend", 0.0),
+                    "key_alias": response.get("key_alias") or existing_key_alias,
+                })
+                for logger in email_loggers:
+                    await logger.send_key_rotated_email(send_key_rotated_email_event=event)
+                return
+
+        if "email" not in general_settings.get("alerting", []):
             return
 
-        try:
-            from litellm_enterprise.types.enterprise_callbacks.send_emails import (
-                SendKeyRotatedEmailEvent,
-            )
-        except ImportError:
-            verbose_proxy_logger.debug("Enterprise types not available, skipping key rotated email")
-            return
+        from litellm.types.integrations.slack_alerting import WebhookEvent
 
-        event: Final = SendKeyRotatedEmailEvent(
-            virtual_key=response.get("key", ""),
-            event="key_rotated",
-            event_group=Litellm_EntityType.KEY,
-            event_message="API Key Rotated",
-            token=response.get("token", ""),
-            spend=response.get("spend", 0.0),
-            max_budget=response.get("max_budget", 0.0),
-            user_id=response.get("user_id", None),
-            team_id=response.get("team_id", "Default Team"),
-            key_alias=response.get("key_alias", existing_key_alias),
+        smtp_event: Final = WebhookEvent.model_validate({
+            **response,
+            "event": "key_rotated",
+            "event_group": Litellm_EntityType.KEY,
+            "event_message": "API Key Rotated",
+            "token": response.get("token_id") or response.get("token"),
+            "spend": response.get("spend", 0.0),
+            "key_alias": response.get("key_alias") or existing_key_alias,
+        })
+        asyncio.create_task(
+            proxy_logging_obj.slack_alerting_instance.send_key_created_or_user_invited_email(webhook_event=smtp_event)
         )
-
-        ##########################
-        # v2 integration for emails
-        ##########################
-        initialized_email_loggers: Final = litellm.logging_callback_manager.get_custom_loggers_for_type(
-            callback_type=BaseEmailLogger
-        )
-        if len(initialized_email_loggers) > 0:
-            for email_logger in initialized_email_loggers:
-                if isinstance(email_logger, BaseEmailLogger):
-                    await email_logger.send_key_rotated_email(
-                        send_key_rotated_email_event=event,
-                    )

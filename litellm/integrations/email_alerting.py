@@ -3,10 +3,12 @@ Functions for sending Email Alerts
 """
 
 import os
+from html import escape
 from collections.abc import Awaitable, Mapping, Sequence
 from typing import TYPE_CHECKING, Final
 
 from litellm._logging import verbose_logger, verbose_proxy_logger
+from litellm.integrations.email_templates.smtp_templates import BUDGET_CROSSED_EMAIL_TEMPLATE
 from litellm.repositories.team_repository import TeamRepository
 from litellm.types.integrations.slack_alerting import WebhookEvent
 
@@ -108,30 +110,28 @@ async def send_team_budget_alert(webhook_event: WebhookEvent) -> bool:
     max_budget: Final = webhook_event.max_budget
     email_html_content = "Alert from LiteLLM Server"
 
-    if recipient_emails_str is None:
+    if not recipient_emails_str:
         verbose_proxy_logger.warning(
             "Email Alerting: Trying to send email alert to no recipient, got recipient_emails=%s",
             recipient_emails_str,
         )
+        return False
 
-    email_html_content = f"""
-    <img src="{email_logo_url}" alt="LiteLLM Logo" width="150" height="50" /> <br/><br/><br/>
-
-    Budget Crossed for Team <b> {team_alias} </b> <br/> <br/>
-
-    Your Teams LLM API usage has crossed it's <b> budget of ${max_budget} </b>, current spend is <b>${webhook_event.spend}</b><br /> <br />
-
-    API requests will be rejected until either (a) you increase your budget or (b) your budget gets reset <br /> <br />
-
-    If you have any questions, please send an email to {email_support_contact} <br /> <br />
-
-    Best, <br />
-    The LiteLLM team <br />
-    """
+    email_html_content = BUDGET_CROSSED_EMAIL_TEMPLATE.format(
+        app_name=escape(os.getenv("UI_CUSTOM_BRAND_NAME") or "LiteLLM"),
+        email_logo_url=email_logo_url,
+        recipient_name=escape(f"Team {team_alias}"),
+        team_info=escape(f"Team {team_alias} "),
+        current_spend=webhook_event.spend,
+        max_budget=max_budget,
+        base_url=os.getenv("PROXY_BASE_URL", "http://0.0.0.0:4000"),
+        email_support_contact=email_support_contact,
+        email_footer=os.getenv("EMAIL_SIGNATURE", ""),
+    )
 
     email_event: Final = {
         "to": recipient_emails_str,
-        "subject": f"LiteLLM {event_name} for Team {team_alias}",
+        "subject": f"{os.getenv('UI_CUSTOM_BRAND_NAME', 'LiteLLM')}: {event_name} for Team {team_alias}",
         "html": email_html_content,
     }
 

@@ -110,9 +110,15 @@ class UserManagementEventHooks:
             max_budget=response.max_budget,
             user_id=response.user_id,
             user_email=response.user_email,
+            user_alias=data.user_alias,
             team_id=response.team_id,
             key_alias=response.key_alias,
         )
+
+        from litellm.proxy.proxy_server import general_settings
+
+        if (general_settings.get("email_settings") or {}).get("New User Invitation") is False:
+            return
 
         sent_via_v2: Final = await UserManagementEventHooks._send_v2_user_invitation_emails(
             event=event, send_invite_email=data.send_invite_email
