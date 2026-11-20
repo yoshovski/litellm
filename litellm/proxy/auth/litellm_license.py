@@ -221,3 +221,19 @@ class LicenseCheck:
                 type(e).__name__,
             )
             return False
+
+
+class CustomBuildLicenseCheck(LicenseCheck):
+    """Edition defaults for the Yoshovski fork."""
+
+    def is_premium(self) -> bool:
+        return True
+
+    def user_seat_limit(self) -> int | None:
+        return None
+
+    def is_team_count_over_limit(self, team_count: int) -> bool:
+        return False
+
+    def auto_router_capability_limit(self) -> int | None:
+        return None

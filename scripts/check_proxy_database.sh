@@ -119,6 +119,11 @@ for path in ['/health/liveliness', '/health/readiness', '/v1/models', '/ui/']:
     call(path)
     print('PASS proxy HTTP '+path)
 
+edition = json.loads(call('/health/license'))
+assert edition['license_type'] == 'enterprise' and edition['has_license'] is False, edition
+assert edition['limits'] == {'max_users': None, 'max_teams': None}, edition
+print('PASS custom Enterprise features remain enabled without a license variable')
+
 call('/model/new', {
     'model_name': 'fixture-db-model',
     'litellm_params': {'model': 'openai/gpt-4.1-mini', 'api_key': 'fixture-provider-only',
@@ -143,19 +148,21 @@ router_config = {'classifier_type': 'heuristic_v2', 'tiers': {
     'COMPLEX': 'fixture-db-model', 'REASONING': 'fixture-db-model',
 }}
 availability = json.loads(call('/auto_router/availability', {'complexity_router_config': router_config}))
-assert any(row['key'] == 'heuristic_v2' and row['remaining'] > 0 for row in availability['allowances'])
+assert availability['allowances'], availability
+assert all(row['limit'] is None for row in availability['allowances']), availability
 assert availability['error'] is None
 preview = json.loads(call('/auto_router/test_routing', {
     'prompt': 'Hello', 'default_model': 'fixture-yaml-model', 'complexity_router_config': router_config,
 }))
 assert preview['routed_model'] in models, preview
-call('/model/new', {'model_name': 'fixture-auto-router', 'litellm_params': {
-    'model': 'auto_router/complexity_router', 'complexity_router_default_model': 'fixture-yaml-model',
-    'complexity_router_config': router_config,
-}})
-routed = json.loads(call('/v1/chat/completions', {'model': 'fixture-auto-router',
-                         'messages': [{'role': 'user', 'content': 'Hello'}]}))
 expected = {'fixture-yaml-model': 'yaml route reached', 'fixture-db-model': 'database route reached'}
-assert routed['choices'][0]['message']['content'] == expected[preview['routed_model']]
-print('PASS built-in Auto Router selects a model and routes a completion to it')
+for name in ['fixture-auto-router', 'fixture-second-auto-router']:
+    call('/model/new', {'model_name': name, 'litellm_params': {
+        'model': 'auto_router/complexity_router', 'complexity_router_default_model': 'fixture-yaml-model',
+        'complexity_router_config': router_config,
+    }})
+    routed = json.loads(call('/v1/chat/completions', {'model': name,
+                             'messages': [{'role': 'user', 'content': 'Hello'}]}))
+    assert routed['choices'][0]['message']['content'] == expected[preview['routed_model']]
+    print('PASS Auto Router selects a model and routes a completion: ' + name)
 PY

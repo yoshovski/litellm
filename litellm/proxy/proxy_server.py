@@ -455,7 +455,7 @@ from litellm.proxy.auth.auth_utils import (
 from litellm.proxy.auth.fallback_budget import RouterFallbackBudgetCheck, router_fallback_budget_check
 from litellm.proxy.auth.fallback_model_access import router_fallback_access_check
 from litellm.proxy.auth.handle_jwt import JWTHandler
-from litellm.proxy.auth.litellm_license import AUTO_ROUTER_LICENSE_REMEDY, LicenseCheck
+from litellm.proxy.auth.litellm_license import AUTO_ROUTER_LICENSE_REMEDY, CustomBuildLicenseCheck
 from litellm.proxy.auth.login_throttle import (
     LoginThrottle,
     declared_proxy_ranges,
@@ -1212,7 +1212,7 @@ except ImportError:
 ###################
 
 server_root_path: Final = get_server_root_path()
-_license_check = LicenseCheck()
+_license_check = CustomBuildLicenseCheck()
 premium_user: bool = _license_check.is_premium()
 premium_user_data: Optional["EnterpriseLicenseData"] = _license_check.airgapped_license_data
 
