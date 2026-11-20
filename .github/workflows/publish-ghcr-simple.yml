@@ -1,0 +1,34 @@
+name: Build and verify custom LiteLLM
+
+on:
+  push:
+    branches: ['custom-v1.*']
+    tags: ['v*-custom-v*']
+
+jobs:
+  build:
+    if: github.repository == 'yoshovski/litellm'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/yoshovski/litellm
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Build image
+        run: docker build --build-arg "LITELLM_RELEASE_TAG=$GITHUB_REF_NAME" --tag "$IMAGE:$GITHUB_REF_NAME" .
+      - name: Check certificate stores
+        run: |
+          docker run --rm --network none --entrypoint python -i "$IMAGE:$GITHUB_REF_NAME" \
+            - --require-certifi < scripts/check_certificate_trust.py
+      - name: Check PostgreSQL, model aliases, and Auto Router
+        run: bash scripts/check_proxy_database.sh "$IMAGE:$GITHUB_REF_NAME"
+      - name: Publish verified tag
+        if: github.ref_type == 'tag'
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE:$GITHUB_REF_NAME"
