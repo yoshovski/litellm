@@ -145,7 +145,17 @@ router_config = {'classifier_type': 'heuristic_v2', 'tiers': {
 availability = json.loads(call('/auto_router/availability', {'complexity_router_config': router_config}))
 assert any(row['key'] == 'heuristic_v2' and row['remaining'] > 0 for row in availability['allowances'])
 assert availability['error'] is None
-call('/auto_router/test_routing', {'prompt': 'Hello', 'default_model': 'fixture-yaml-model',
-                                  'complexity_router_config': router_config})
-print('PASS built-in Auto Router accepts and previews a routing configuration')
+preview = json.loads(call('/auto_router/test_routing', {
+    'prompt': 'Hello', 'default_model': 'fixture-yaml-model', 'complexity_router_config': router_config,
+}))
+assert preview['routed_model'] in models, preview
+call('/model/new', {'model_name': 'fixture-auto-router', 'litellm_params': {
+    'model': 'auto_router/complexity_router', 'complexity_router_default_model': 'fixture-yaml-model',
+    'complexity_router_config': router_config,
+}})
+routed = json.loads(call('/v1/chat/completions', {'model': 'fixture-auto-router',
+                         'messages': [{'role': 'user', 'content': 'Hello'}]}))
+expected = {'fixture-yaml-model': 'yaml route reached', 'fixture-db-model': 'database route reached'}
+assert routed['choices'][0]['message']['content'] == expected[preview['routed_model']]
+print('PASS built-in Auto Router selects a model and routes a completion to it')
 PY

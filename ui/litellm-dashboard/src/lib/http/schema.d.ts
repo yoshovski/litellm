@@ -49916,6 +49916,11 @@ export interface components {
          */
         UIThemeConfig: {
             /**
+             * Email Brand Name
+             * @description Brand name shown in notification emails
+             */
+            email_brand_name?: string | null;
+            /**
              * Favicon Url
              * @description URL to custom favicon image. Must be an HTTP/HTTPS URL to a .ico, .png, or .svg file
              */
