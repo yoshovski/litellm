@@ -9,6 +9,7 @@ from typing_extensions import ReadOnly, TypedDict
 
 import litellm
 from litellm.constants import RUNWAYML_DEFAULT_API_VERSION
+from litellm.images.utils import image_to_data_url
 from litellm.litellm_core_utils.url_utils import encode_url_path_segment, join_api_base
 from litellm.llms.base_llm.chat.transformation import BaseLLMException
 from litellm.llms.base_llm.videos.async_task_utils import unsupported_video_fields
@@ -177,10 +178,15 @@ class RunwayMLVideoConfig(BaseVideoConfig):
 
     @staticmethod
     def _prompt_image_param(video_create_optional_params: VideoCreateOptionalRequestParams) -> Mapping[str, object]:
-        # Handle input_reference parameter - map to promptImage
-        if "input_reference" in video_create_optional_params:
-            return {"promptImage": video_create_optional_params["input_reference"]}
-        return {}
+        if "input_reference" not in video_create_optional_params:
+            return {}
+        input_reference: Final = video_create_optional_params["input_reference"]
+        if input_reference is None or isinstance(input_reference, str):
+            return {"promptImage": input_reference}
+        data_url: Final = image_to_data_url(input_reference)
+        if len(data_url) > 5_000_000:
+            raise RunwayMLError(400, "The starting image is too large for RunwayML. Use a smaller image.")
+        return {"promptImage": data_url}
 
     @staticmethod
     def _ratio_param(video_create_optional_params: VideoCreateOptionalRequestParams) -> Mapping[str, str]:

@@ -2,8 +2,10 @@
 Tests for RunwayML video generation transformation.
 """
 
-from unittest.mock import Mock
+from base64 import b64encode
+from io import BytesIO
 from typing import Final
+from unittest.mock import Mock
 
 import httpx
 import pytest
@@ -17,6 +19,37 @@ from litellm.llms.runwayml.videos.transformation import (
 )
 from litellm.types.router import GenericLiteLLMParams
 from litellm.types.videos.main import VideoObject
+
+
+def test_uploaded_first_frame_is_encoded_for_runway() -> None:
+    png: Final = b"\x89PNG\r\n\x1a\nfixture"
+    upload: Final = BytesIO(png)
+    upload.seek(3)
+    mapped: Final = RunwayMLVideoConfig().map_openai_params(
+        {"input_reference": upload, "size": "1280x720", "seconds": 2},
+        "gen4_turbo",
+        False,
+    )
+    assert mapped == {
+        "promptImage": f"data:image/png;base64,{b64encode(png).decode('ascii')}",
+        "ratio": "1280:720",
+        "duration": 2,
+    }
+    assert upload.tell() == 3
+
+
+@pytest.mark.parametrize("source", ["https://example.com/frame.png", "data:image/png;base64,cG5n"])
+def test_string_first_frame_is_forwarded_unchanged(source: str) -> None:
+    assert RunwayMLVideoConfig().map_openai_params(
+        {"input_reference": source}, "gen4_turbo", False
+    ) == {"promptImage": source}
+
+
+def test_oversized_uploaded_first_frame_has_a_client_error() -> None:
+    upload: Final = BytesIO(b"\x89PNG\r\n\x1a\n" + bytes(3_750_000))
+    with pytest.raises(RunwayMLError, match="starting image is too large") as error:
+        RunwayMLVideoConfig().map_openai_params({"input_reference": upload}, "gen4_turbo", False)
+    assert error.value.status_code == 400
 
 
 @pytest.mark.parametrize("drop_params", [False, True])
